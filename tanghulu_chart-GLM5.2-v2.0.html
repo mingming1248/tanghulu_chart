@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tanghulu Chart | 糖胡芦图 — Price · Volume Profile · Order Flow Delta</title>
+<style>
+  /* ============ 主题与布局 / Theme & Layout ============ */
+  :root{
+    --bg:#0a0e17;
+    --panel:#10151f;
+    --panel2:#0d121b;
+    --grid:#1a2230;
+    --gridStrong:#243042;
+    --text:#cfd6e4;
+    --textDim:#7e8aa0;
+    --textFaint:#525d72;
+    --buy:#ff4d4f;       /* 主买 / Aggressive Buying (Ask Vol) — 红 Red */
+    --sell:#26d07c;      /* 主卖 / Aggressive Selling (Bid Vol) — 绿 Green */
+    --poc:#ffd24a;       /* POC 高亮 — 金色 Gold */
+    --va:rgb(0, 0, 255); /* 价值区 Value Area */
+    --vaEdge:rgb(0, 0, 255);
+    --up:#ff4d4f;        /* 涨 Red (中国惯例 / CN convention) */
+    --down:#26d07c;      /* 跌 Green */
+    --stick:#39434f;
+    --accent:#5b9dff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:linear-gradient(180deg,#0b1019,#070a11);
+    color:var(--text);
+    font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding:18px 22px 28px;
+    overflow:auto;
+  }
+  header{margin-bottom:14px}
+  header h1{
+    font-size:22px;font-weight:700;letter-spacing:.5px;
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  }
+  header h1 .badge{
+    font-size:11px;font-weight:600;letter-spacing:1px;
+    color:var(--buy);border:1px solid rgba(255,77,79,.4);
+    padding:3px 8px;border-radius:4px;background:rgba(255,77,79,.06);
+  }
+  header p{color:var(--textDim);font-size:13px;margin-top:6px;max-width:1120px;line-height:1.65}
+  header p.en{color:var(--textFaint);font-size:12px;margin-top:3px}
+
+  /* ============ 控制栏 / Controls ============ */
+  #controls{
+    display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+    margin:14px 0 10px;
+  }
+  #controls button{
+    background:#141b27;color:var(--text);
+    border:1px solid var(--gridStrong);
+    padding:7px 14px;border-radius:6px;cursor:pointer;
+    font-size:12.5px;letter-spacing:.3px;
+    transition:all .15s;
+  }
+  #controls button:hover{border-color:var(--accent);color:#fff;background:#1a2330}
+  #controls button.active{border-color:var(--buy);color:var(--buy);background:rgba(255,77,79,.07)}
+  #controls .sep{width:1px;height:20px;background:var(--gridStrong);margin:0 4px}
+  #controls .hint{color:var(--textFaint);font-size:12px}
+
+  /* ============ 图表区 / Chart ============ */
+  #chartWrap{
+    position:relative;
+    background:var(--panel);
+    border:1px solid var(--gridStrong);
+    border-radius:8px;
+    padding:8px;
+    box-shadow:0 6px 30px rgba(0,0,0,.35);
+  }
+  canvas{display:block;width:100%;border-radius:5px}
+  #tooltip{
+    position:absolute;pointer-events:none;z-index:10;
+    background:rgba(13,18,27,.97);
+    border:1px solid var(--gridStrong);
+    border-radius:8px;padding:11px 13px;
+    font-size:12px;line-height:1.55;
+    min-width:250px;max-width:300px;
+    box-shadow:0 8px 26px rgba(0,0,0,.55);
+    backdrop-filter:blur(4px);
+    display:none;
+    transition:opacity .08s;
+  }
+  #tooltip .ttitle{font-weight:700;font-size:12.5px;margin-bottom:7px;color:#fff;
+    display:flex;justify-content:space-between;align-items:center;gap:10px}
+  #tooltip .ttag{font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px}
+  #tooltip .trow{display:flex;justify-content:space-between;gap:14px;color:var(--textDim)}
+  #tooltip .trow b{color:var(--text);font-weight:600}
+  #tooltip .trow .kup{color:var(--buy)}
+  #tooltip .trow .ksell{color:var(--sell)}
+  #tooltip .trow .kpoc{color:var(--poc)}
+  #tooltip .trow .kdelta.pos{color:var(--up)}
+  #tooltip .trow .kdelta.neg{color:var(--down)}
+  #tooltip .tbar{height:5px;border-radius:3px;margin-top:3px;overflow:hidden;display:flex;background:#1a2230}
+  #tooltip .tbar .b{height:100%}
+  #tooltip .tdivider{height:1px;background:var(--gridStrong);margin:7px 0}
+  #tooltip .tlevel{font-size:11px;color:var(--textFaint)}
+
+  /* ============ 图例 / Legend ============ */
+  #legend{
+    display:flex;flex-wrap:wrap;gap:18px;
+    margin:12px 2px 4px;font-size:12px;color:var(--textDim);
+  }
+  #legend .item{display:flex;align-items:center;gap:7px}
+  #legend .item .txt{display:flex;flex-direction:column;line-height:1.25}
+  #legend .item .txt .en{font-size:10.5px;color:var(--textFaint)}
+  #legend .swatch{width:14px;height:14px;border-radius:3px;display:inline-block;flex:none}
+  #legend .swatch.buy{background:var(--buy)}
+  #legend .swatch.sell{background:var(--sell)}
+  #legend .swatch.poc{background:transparent;border:2px solid var(--poc)}
+  #legend .swatch.va{background:var(--va);border:1px solid var(--vaEdge)}
+  #legend .swatch.up{background:var(--up)}
+  #legend .swatch.down{background:var(--down)}
+
+  /* ============ 读图说明 / Guide ============ */
+  #guide{
+    margin-top:18px;
+    display:grid;grid-template-columns:1fr 1fr;gap:14px;
+    font-size:12.5px;line-height:1.65;
+  }
+  @media (max-width:920px){#guide{grid-template-columns:1fr}}
+  .card{
+    background:var(--panel2);border:1px solid var(--gridStrong);
+    border-radius:8px;padding:14px 16px;
+  }
+  .card h3{font-size:13px;color:#fff;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+  .card h3 .en{font-size:11px;color:var(--textFaint);font-weight:500}
+  .card h3 .n{color:var(--accent);font-variant-numeric:tabular-nums}
+  .card ul{margin:6px 0 0 16px;color:var(--textDim)}
+  .card ul li{margin-bottom:3px}
+  .card ul li b{color:var(--text)}
+  .card ul li .en{display:block;color:var(--textFaint);font-size:11.5px;margin-top:1px}
+  .card .kbd{color:var(--buy);font-weight:600}
+  .card .ksd{color:var(--sell);font-weight:600}
+  .card .kp{color:var(--poc);font-weight:600}
+  footer{margin-top:16px;color:var(--textFaint);font-size:11.5px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>糖胡芦图 Tanghulu Chart <span class="badge">NEW VISUAL LANGUAGE</span></h1>
+  <p>
+    在单一图形元素中同时编码<b>价格（OHLC）</b>、<b>成交量分布</b>与<b>订单流失衡（Delta）</b>。
+    每根"糖葫芦"由多个价格层"珠子"对称串在中心轴上：珠子大小=该层总成交量，
+    珠子内<b>左红（主买）右绿（主卖）</b>按比例分色，分界线偏移即买卖失衡，金色描边为POC，蓝色带为价值区。
+  </p>
+  <p class="en">
+    Encodes <b>price (OHLC)</b>, <b>volume profile</b> and <b>order-flow imbalance (Delta)</b> in a single element.
+    Each "tanghulu" stacks symmetric beads on a central axis: bead size = total volume at that price;
+    <b>left-red (buy) / right-green (sell)</b> split reveals the imbalance via the divider offset;
+    gold outline = POC; blue band = Value Area.
+  </p>
+</header>
+
+<div id="controls">
+  <button id="btnView" class="active">视图：糖胡芦图 / View: Tanghulu</button>
+  <button id="btnVA" class="active">价值区：显示 / Value Area: On</button>
+  <button id="btnPOC" class="active">POC金边：显示 / POC: On</button>
+  <button id="btnGrid" class="active">网格：显示 / Grid: On</button>
+  <div class="sep"></div>
+  <button id="btnRegen">重新生成数据 / Regenerate</button>
+  <span class="hint">悬停查看精确数据 Hover for data · 35个交易日 35 sessions · 模拟数据 Simulated</span>
+</div>
+
+<div id="chartWrap">
+  <canvas id="chart"></canvas>
+  <div id="tooltip"></div>
+</div>
+
+<div id="legend">
+  <div class="item"><span class="swatch buy"></span><span class="txt"><span>主买量 Ask Vol</span><span class="en">Aggressive Buying (hits ask)</span></span></div>
+  <div class="item"><span class="swatch sell"></span><span class="txt"><span>主卖量 Bid Vol</span><span class="en">Aggressive Selling (hits bid)</span></span></div>
+  <div class="item"><span class="swatch poc"></span><span class="txt"><span>POC 控制点</span><span class="en">Point of Control</span></span></div>
+  <div class="item"><span class="swatch va"></span><span class="txt"><span>价值区</span><span class="en">Value Area (~70% vol)</span></span></div>
+  <div class="item"><span class="swatch up"></span><span class="txt"><span>开→收 上涨</span><span class="en">Close > Open (up)</span></span></div>
+  <div class="item"><span class="swatch down"></span><span class="txt"><span>开→收 下跌</span><span class="en">Close < Open (down)</span></span></div>
+</div>
+
+<div id="guide">
+  <div class="card">
+    <h3><span class="n">01</span> 图形元素解码 Reading the Shape <span class="en">/ 形状解读</span></h3>
+    <ul>
+      <li><b>中心轴 Stick</b>：垂直细线，连接当日最高价(High)与最低价(Low)。
+        <span class="en">Vertical line connecting High and Low.</span></li>
+      <li><b>珠子 Bead</b>：每个价格层一颗，<b>左右对称</b>，宽度∝该层总成交量。
+        <span class="en">One per price level, <b>left-right symmetric</b>, width ∝ total volume.</span></li>
+      <li><b>分色 Split</b>：珠子内<span class="kbd">左红=主买</span>、<span class="ksd">右绿=主卖</span>，分界线偏移=买卖失衡。
+        <span class="en"><span class="kbd">Left-red = buy</span>, <span class="ksd">right-green = sell</span>; divider offset = imbalance.</span></li>
+      <li><b><span class="kp">金色描边</span> POC</b>：当日总成交量最大的价格，市场"公允价值"。
+        <span class="en">Price with the highest total volume = fair value.</span></li>
+      <li><b>蓝色背景带 Value Area</b>：围绕POC累计约70%成交量的价格区间。
+        <span class="en">Price range holding ~70% of volume around POC.</span></li>
+      <li><b>开/收标记 Open/Close</b>：轴左侧短横=开盘，右侧短横=收盘，红涨绿跌。
+        <span class="en">Left tick = Open, right tick = Close; red=up, green=down.</span></li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3><span class="n">02</span> 如何读出市场结构 Interpreting Structure <span class="en">/ 市场结构</span></h3>
+    <ul>
+      <li><b>单日</b>：POC=价值共识；珠子最大处=成交密集区。
+        <span class="en">POC = value consensus; largest bead = volume node.</span></li>
+      <li><b>多日趋势</b>：POC逐日抬高=多头主导；逐日下移=空头主导。
+        <span class="en">Rising POC = buyers in control; falling POC = sellers in control.</span></li>
+      <li><b>失衡切换</b>：同价位珠子红绿分界<b>方向反转</b>=多空控制权易手。
+        <span class="en">Divider flipping direction at a level = control handover.</span></li>
+      <li><b>高位主卖堆积</b>：创新高但顶部珠子绿色占比大=派发/顶部特征。
+        <span class="en">New high but green-dominant top beads = distribution.</span></li>
+      <li><b>低位主买堆积</b>：新低但底部红色占比大=吸筹/底部特征。
+        <span class="en">New low but red-dominant bottom beads = accumulation.</span></li>
+      <li><b>价值区迁移</b>：VA上移/下移=趋势；VA重叠=震荡。
+        <span class="en">Migrating VA = trend; overlapping VA = balance.</span></li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3><span class="n">03</span> 设计说明：Delta如何编码 How Imbalance Is Encoded <span class="en">/ 失衡编码</span></h3>
+    <ul>
+      <li><b>对称轮廓</b>：每颗珠子左右等宽（宽度=该层总成交量），形状对称美观。
+        <span class="en">Symmetric outline: both halves equal width = total volume.</span></li>
+      <li><b>比例分色</b>：珠子内按主买/主卖占比，左红右绿竖直分割。
+        <span class="en">Proportional split: left-red/right-green divided by buy/sell ratio.</span></li>
+      <li><b>分界线=Delta</b>：分界线越偏右=买方越强；越偏左=卖方越强；居中=平衡。
+        <span class="en">Divider right = buyers dominate; left = sellers dominate; center = balanced.</span></li>
+      <li><b>颜色语义统一</b>：红=多头/上涨，绿=空头/下跌，与涨跌色一致。
+        <span class="en">Unified color semantics: red=bullish, green=bearish.</span></li>
+      <li><b>无需第三维</b>：分布与方向全部编码在2D图形内部，保持时间-价格坐标。
+        <span class="en">No 3rd dimension; all encoded inside the 2D element.</span></li>
+      <li><b>可扩展</b>：价格层分布可替换为真实逐笔/订单流数据。
+        <span class="en">Replaceable with real tick / order-flow data.</span></li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3><span class="n">04</span> 与传统K线对比 vs Candlestick <span class="en">/ 对比</span></h3>
+    <ul>
+      <li><b>K线</b>：仅OHLC；同OHLC无法区分内部结构。
+        <span class="en">OHLC only; identical OHLC hides internal structure.</span></li>
+      <li><b>糖胡芦图</b>：OHLC相同也能看出成交重心、价值区、多空主动权。
+        <span class="en">Reveals volume node, value area, aggression even with same OHLC.</span></li>
+      <li><b>K线+量柱</b>：量柱是总量，不分价位不分买卖方。
+        <span class="en">Volume bar = total only, no price split, no side split.</span></li>
+      <li><b>糖胡芦图</b>：按价格层分布并按主动方拆分，三维信息压进2D。
+        <span class="en">Per-level distribution + aggressor split in 2D.</span></li>
+      <li><b>Market Profile</b>：仅分布，不含方向。
+        <span class="en">Profile shows distribution, not direction.</span></li>
+      <li><b>糖胡芦图</b>：分布+方向融合体，可一键切回K线视图。
+        <span class="en">Fuses distribution + direction; toggle to candlesticks anytime.</span></li>
+    </ul>
+  </div>
+</div>
+
+<footer>
+  糖胡芦图原型 · 数据为模拟（多峰高斯 + 随机Delta偏置）· 架构支持接入真实逐笔/订单流数据<br>
+  Tanghulu Chart Prototype · Simulated data (multi-modal Gaussian + random Delta skew) · Pluggable real tick/order-flow data
+</footer>
+
+<script>
+/* ============================================================
+ *  Tanghulu Chart — 糖胡芦图
+ *  Price · Volume Profile · Order Flow Delta
+ *  Single-file HTML5 Canvas implementation
+ * ============================================================ */
+
+/* ---------- 工具：可重复随机数 / Seeded RNG ---------- */
+function mulberry32(seed){
+  return function(){
+    let t = seed += 0x6D2B79F5;
+    t = Math.imul(t ^ (t>>>15), t | 1);
+    t ^= t + Math.imul(t ^ (t>>>7), t | 61);
+    return ((t ^ (t>>>14)) >>> 0) / 4294967296;
+  };
+}
+const gauss = (x,mu,sig)=> Math.exp(-0.5*((x-mu)/sig)**2);
+const clamp = (v,a,b)=> Math.max(a, Math.min(b, v));
+
+/* ---------- 数据生成：模拟35个交易日 / Generate 35 sessions ---------- */
+function genSessions(n, seed){
+  const rand = mulberry32(seed);
+  const sessions = [];
+  let prevClose = 98 + rand()*8;
+  const start = new Date(2024, 0, 2);
+  for(let i=0;i<n;i++){
+    // 趋势叙事：前段多头 → 中段筑顶 → 后段空头 / bullish → topping → bearish
+    const ph = i/n;
+    let drift;
+    if(ph < 0.45) drift = 0.55;
+    else if(ph < 0.62) drift = 0.05;
+    else drift = -0.65;
+
+    const gap = (rand()-0.5)*0.4;
+    const open = prevClose * (1 + gap/100);
+    const noise = (rand()-0.5)*1.8;
+    const close = open * (1 + (drift+noise)/100);
+
+    const body = Math.abs(close-open);
+    const wick = open * (0.006 + rand()*0.014);
+    const high = Math.max(open,close) + rand()*wick*0.9 + body*0.3;
+    const low  = Math.min(open,close) - rand()*wick*0.9 - body*0.3;
+
+    // 总成交量 / total volume
+    const baseVol = 4200 + rand()*6500;
+    const vol = baseVol * (1 + Math.abs(drift+noise)*0.18 + Math.abs(close-open)/open*8);
+
+    // —— 价格层成交量分布：多峰高斯 / Multi-modal Gaussian profile ——
+    const numBins = 22;
+    const span = high - low;
+    let pocPos;
+    if(Math.abs(drift) > 0.3) pocPos = clamp((close-low)/span, 0.18, 0.82);
+    else pocPos = 0.4 + rand()*0.2;
+    const pocPrice = low + span*pocPos;
+    const p2Pos = clamp(pocPos + (rand()-0.5)*0.45, 0.08, 0.92);
+    const p2Price = low + span*p2Pos;
+    const sig1 = span*(0.10+rand()*0.05);
+    const sig2 = span*(0.16+rand()*0.06);
+    const w1 = 1.0, w2 = 0.35+rand()*0.45;
+
+    let raw=[], rawTotal=0;
+    for(let b=0;b<numBins;b++){
+      const price = low + (b+0.5)*span/numBins;
+      let v = w1*gauss(price,pocPrice,sig1) + w2*gauss(price,p2Price,sig2);
+      v += 0.04 + rand()*0.05;
+      raw.push({price,v}); rawTotal += v;
+    }
+
+    // —— Delta偏置：按价位与趋势阶段分配主买比例 / Buy ratio per level ——
+    const bullishBias = drift>0.2?0.16 : (drift<-0.2?-0.18:0.0);
+    const bins=[];
+    for(let b=0;b<numBins;b++){
+      const price = raw[b].price;
+      const pos = (price-low)/span;
+      let buyRatio = 0.52 - 0.22*(pos-0.5)*2 + bullishBias;
+      buyRatio += (rand()-0.5)*0.22;
+      if(drift < -0.2 && pos > 0.7) buyRatio -= 0.12;
+      if(drift < -0.2 && pos < 0.3) buyRatio += 0.08;
+      buyRatio = clamp(buyRatio, 0.08, 0.92);
+      const v = raw[b].v/rawTotal*vol;
+      bins.push({ price, buy:v*buyRatio, sell:v*(1-buyRatio), total:v, buyRatio });
+    }
+
+    // —— POC & 价值区 / POC & Value Area (70%) ——
+    let pocIdx=0, mv=0;
+    bins.forEach((b,idx)=>{ if(b.total>mv){mv=b.total;pocIdx=idx;} });
+    let vaTotal=bins[pocIdx].total, lo=pocIdx, hi=pocIdx;
+    const target=0.70*vol;
+    while(vaTotal<target && (lo>0||hi<numBins-1)){
+      const dv = lo>0 ? bins[lo-1].total : -1;
+      const uv = hi<numBins-1 ? bins[hi+1].total : -1;
+      if(dv>=uv){ lo--; vaTotal+=bins[lo].total; }
+      else { hi++; vaTotal+=bins[hi].total; }
+    }
+    const halfBin = span/numBins/2;
+    const buyVol = bins.reduce((s,b)=>s+b.buy,0);
+    const sellVol = bins.reduce((s,b)=>s+b.sell,0);
+
+    sessions.push({
+      date: new Date(start.getTime()+i*86400000),
+      open, high, low, close, volume:vol,
+      bins, pocIdx, pocPrice:bins[pocIdx].price,
+      vaLoIdx:lo, vaHiIdx:hi,
+      vaLow: bins[lo].price - halfBin,
+      vaHigh: bins[hi].price + halfBin,
+      buyVol, sellVol, delta: buyVol-sellVol
+    });
+    prevClose = close;
+  }
+  return sessions;
+}
+
+/* ============================================================
+ *  渲染器 / Renderer
+ * ============================================================ */
+const canvas = document.getElementById('chart');
+const ctx = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+
+let DPR = window.devicePixelRatio || 1;
+let W=0, H=0;
+let sessions = [];
+let view = 'tanghulu';
+let showVA = true, showPOC = true, showGrid = true;
+let hover = null;
+
+const PAD = { top:18, right:64, bottom:46, left:10 };
+const VOL_H = 70;
+let plot = {};
+
+function resize(){
+  const wrap = document.getElementById('chartWrap');
+  W = wrap.clientWidth - 16;
+  H = 660;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  canvas.width = Math.round(W*DPR);
+  canvas.height = Math.round(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  computeLayout();
+  draw();
+}
+function computeLayout(){
+  plot.left = PAD.left;
+  plot.right = W - PAD.right;
+  plot.top = PAD.top;
+  plot.bottom = H - PAD.bottom - VOL_H - 14;
+  plot.volTop = H - PAD.bottom - VOL_H;
+  plot.volBottom = H - PAD.bottom;
+  plot.width = plot.right - plot.left;
+  plot.height = plot.bottom - plot.top;
+  const prices = sessions.flatMap(s=>[s.high,s.low]);
+  plot.pMin = Math.min(...prices);
+  plot.pMax = Math.max(...prices);
+  const pad = (plot.pMax-plot.pMin)*0.06;
+  plot.pMin -= pad; plot.pMax += pad;
+  plot.n = sessions.length;
+  plot.slot = plot.width / plot.n;
+  plot.maxBeadHalf = plot.slot*0.46;     // 对称珠子单侧半宽 / symmetric half-width
+  plot.maxVol = Math.max(...sessions.map(s=>s.volume));
+  plot.maxBinPerSession = sessions.map(s=>Math.max(...s.bins.map(b=>b.total)));
+}
+const yPrice = p => plot.top + (plot.pMax - p)/(plot.pMax-plot.pMin)*plot.height;
+const xSession = i => plot.left + (i+0.5)*plot.slot;
+
+/* ---------- 主绘制 / Main draw ---------- */
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  drawBackground();
+  if(showGrid) drawGrid();
+  drawVolumeAxis();
+  if(view==='tanghulu'){
+    sessions.forEach((s,i)=> drawTanghulu(s,i));
+  } else {
+    sessions.forEach((s,i)=> drawCandle(s,i));
+  }
+  drawPriceAxis();
+  drawTimeAxis();
+  drawCrosshair();
+}
+
+function drawBackground(){
+  ctx.fillStyle = '#0b1119';
+  ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle = 'rgba(255,255,255,.04)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, plot.volTop-7); ctx.lineTo(W, plot.volTop-7);
+  ctx.stroke();
+}
+
+function drawGrid(){
+  ctx.strokeStyle = 'rgba(255,255,255,.035)';
+  ctx.lineWidth = 1;
+  const steps = 8;
+  for(let i=0;i<=steps;i++){
+    const p = plot.pMin + (plot.pMax-plot.pMin)*i/steps;
+    const y = yPrice(p);
+    ctx.beginPath(); ctx.moveTo(plot.left,y); ctx.lineTo(plot.right,y); ctx.stroke();
+  }
+  const every = Math.ceil(plot.n/8);
+  for(let i=0;i<plot.n;i+=every){
+    const x = xSession(i);
+    ctx.beginPath(); ctx.moveTo(x,plot.top); ctx.lineTo(x,plot.volBottom); ctx.stroke();
+  }
+}
+
+/* ---------- 糖胡芦绘制（对称珠子）/ Draw one Tanghulu ---------- */
+function drawTanghulu(s, idx){
+  const cx = xSession(idx);
+  const highY = yPrice(s.high), lowY = yPrice(s.low);
+  const openY = yPrice(s.open), closeY = yPrice(s.close);
+  const up = s.close >= s.open;
+  const halfBinPrice = (s.high-s.low)/s.bins.length;
+
+  // —— 价值区背景带 / Value Area band ——
+  if(showVA){
+    const vaTopY = yPrice(s.vaHigh);
+    const vaBotY = yPrice(s.vaLow);
+    ctx.fillStyle = 'rgba(0,0,255,.07)';
+    ctx.fillRect(cx-plot.slot/2+1, vaTopY, plot.slot-2, vaBotY-vaTopY);
+    ctx.strokeStyle = 'rgba(0,0,255,.18)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2,3]);
+    ctx.strokeRect(cx-plot.slot/2+1, vaTopY, plot.slot-2, vaBotY-vaTopY);
+    ctx.setLineDash([]);
+  }
+
+  // —— 中心轴 High→Low / Stick ——
+  ctx.strokeStyle = 'rgba(120,134,152,.55)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx, highY); ctx.lineTo(cx, lowY);
+  ctx.stroke();
+
+  // —— 开→收 区段加粗着色（方向）/ Open-Close segment ——
+  ctx.strokeStyle = up? 'rgba(255,77,79,.6)':'rgba(38,208,124,.6)';
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  ctx.moveTo(cx, openY); ctx.lineTo(cx, closeY);
+  ctx.stroke();
+
+  // —— 对称珠子（价格层）/ Symmetric beads ——
+  const maxBin = plot.maxBinPerSession[idx];
+  for(let b=0;b<s.bins.length;b++){
+    const bin = s.bins[b];
+    const yC = yPrice(bin.price);
+    const beadH = yPrice(bin.price - halfBinPrice) - yPrice(bin.price + halfBinPrice) - 1.2;
+    const ry = Math.max(1.6, beadH/2);
+    // 对称：左右半轴等宽 = 总成交量 / symmetric: equal half-width = total volume
+    const W2 = (bin.total/maxBin) * plot.maxBeadHalf;
+    drawBead(cx, yC, W2, ry, bin, idx, b);
+  }
+
+  // —— POC 金边 / POC gold outline ——
+  if(showPOC){
+    const poc = s.bins[s.pocIdx];
+    const yC = yPrice(poc.price);
+    const beadH = yPrice(poc.price - halfBinPrice) - yPrice(poc.price + halfBinPrice) - 1.2;
+    const ry = Math.max(1.6, beadH/2);
+    const W2 = (poc.total/maxBin) * plot.maxBeadHalf;
+    ctx.strokeStyle = '#ffd24a';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(cx, yC, Math.max(W2,1.4), ry, 0, 0, Math.PI*2);
+    ctx.stroke();
+  }
+
+  // —— 开盘/收盘 标记 / Open & Close ticks ——
+  const tickLen = plot.slot*0.30;
+  ctx.strokeStyle = '#e6ecf5';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(cx - plot.maxBeadHalf - 4, openY);
+  ctx.lineTo(cx - plot.maxBeadHalf - 4 - tickLen, openY);
+  ctx.stroke();
+  ctx.strokeStyle = up? '#ff4d4f':'#26d07c';
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  ctx.moveTo(cx + plot.maxBeadHalf + 4, closeY);
+  ctx.lineTo(cx + plot.maxBeadHalf + 4 + tickLen, closeY);
+  ctx.stroke();
+
+  // —— High/Low 极端小横线 ——
+  ctx.strokeStyle = 'rgba(120,134,152,.7)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx-3, highY); ctx.lineTo(cx+3, highY);
+  ctx.moveTo(cx-3, lowY);  ctx.lineTo(cx+3, lowY);
+  ctx.stroke();
+}
+
+/* 绘制对称珠子：左右等宽，内按主买/主卖比例分色
+ * Draw a symmetric bead: equal width, split by buy/sell ratio
+ * 左红(主买) / 右绿(主卖)，分界线 x = cx - W2 + 2*W2*buyRatio
+ */
+function drawBead(cx, yC, W2, ry, bin, sIdx, bIdx){
+  if(W2 < 0.6) return;
+  const hovered = hover && hover.sessionIdx===sIdx && hover.binIdx===bIdx;
+  // 分界线 / divider
+  const dividerX = cx - W2 + 2*W2*bin.buyRatio;
+
+  // 整个对称椭圆路径 / full symmetric ellipse path
+  function ellipsePath(){
+    ctx.beginPath();
+    ctx.ellipse(cx, yC, W2, ry, 0, 0, Math.PI*2);
+  }
+
+  // 左半（主买 红）/ left part (buy, red): 从左到分界线
+  ctx.save();
+  ellipsePath();
+  ctx.clip();
+  ctx.fillStyle = hovered? '#ff7a7c' : 'rgba(255,77,79,.85)';
+  ctx.fillRect(cx - W2 - 1, yC - ry - 1, (dividerX - (cx - W2)) + 1, 2*ry + 2);
+  ctx.restore();
+
+  // 右半（主卖 绿）/ right part (sell, green): 从分界线到右
+  ctx.save();
+  ellipsePath();
+  ctx.clip();
+  ctx.fillStyle = hovered? '#5fe6a8' : 'rgba(38,208,124,.85)';
+  ctx.fillRect(dividerX, yC - ry - 1, ((cx + W2) - dividerX) + 1, 2*ry + 2);
+  ctx.restore();
+
+  // 分界线（高亮Delta）/ divider line
+  ctx.strokeStyle = 'rgba(255,255,255,.35)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(dividerX, yC - ry); ctx.lineTo(dividerX, yC + ry);
+  ctx.stroke();
+
+  // 悬停高亮边 / hover outline
+  if(hovered){
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ellipsePath();
+    ctx.stroke();
+  }
+}
+
+/* ---------- 传统K线（对比视图）/ Candlestick view ---------- */
+function drawCandle(s, idx){
+  const cx = xSession(idx);
+  const highY=yPrice(s.high), lowY=yPrice(s.low);
+  const openY=yPrice(s.open), closeY=yPrice(s.close);
+  const up = s.close>=s.open;
+  const col = up? '#ff4d4f':'#26d07c';
+  const bodyW = plot.slot*0.5;
+  ctx.strokeStyle = col;
+  ctx.fillStyle = up? 'rgba(255,77,79,.28)':'rgba(38,208,124,.32)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(cx,highY); ctx.lineTo(cx,lowY); ctx.stroke();
+  const yTop=Math.min(openY,closeY), h=Math.max(1.5,Math.abs(closeY-openY));
+  ctx.fillRect(cx-bodyW/2, yTop, bodyW, h);
+  ctx.strokeRect(cx-bodyW/2, yTop, bodyW, h);
+}
+
+/* ---------- 底部成交量直方图 / Volume histogram ---------- */
+function drawVolumeAxis(){
+  for(let i=0;i<sessions.length;i++){
+    const s = sessions[i];
+    const cx = xSession(i);
+    const w = plot.slot*0.5;
+    const h = (s.volume/plot.maxVol)*(plot.volBottom-plot.volTop-4);
+    const buyH = h*(s.buyVol/s.volume);
+    const sellH = h - buyH;
+    ctx.fillStyle = 'rgba(255,77,79,.6)';
+    ctx.fillRect(cx-w/2, plot.volBottom-buyH, w, buyH);
+    ctx.fillStyle = 'rgba(38,208,124,.6)';
+    ctx.fillRect(cx-w/2, plot.volBottom-buyH-sellH, w, sellH);
+  }
+}
+
+/* ---------- 价格轴 / Price axis ---------- */
+function drawPriceAxis(){
+  ctx.fillStyle = '#7e8aa0';
+  ctx.font = '11px "Segoe UI",sans-serif';
+  ctx.textAlign='left'; ctx.textBaseline='middle';
+  const steps=8;
+  for(let i=0;i<=steps;i++){
+    const p = plot.pMin + (plot.pMax-plot.pMin)*i/steps;
+    const y = yPrice(p);
+    ctx.fillText(p.toFixed(2), plot.right+6, y);
+  }
+  ctx.save();
+  ctx.translate(plot.right+54, plot.top+plot.height/2);
+  ctx.rotate(Math.PI/2);
+  ctx.textAlign='center'; ctx.fillStyle='#525d72';
+  ctx.font='11px "Segoe UI",sans-serif';
+  ctx.fillText('价格 Price', 0,0);
+  ctx.restore();
+}
+
+/* ---------- 时间轴 / Time axis ---------- */
+function drawTimeAxis(){
+  ctx.fillStyle='#7e8aa0'; ctx.font='10.5px "Segoe UI",sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  const every = Math.ceil(plot.n/7);
+  for(let i=0;i<plot.n;i+=every){
+    const d = sessions[i].date;
+    const label = (d.getMonth()+1)+'/'+d.getDate();
+    ctx.fillText(label, xSession(i), plot.volBottom+8);
+  }
+}
+
+/* ---------- 十字光标 / Crosshair ---------- */
+function drawCrosshair(){
+  if(!hover) return;
+  const cx = xSession(hover.sessionIdx);
+  ctx.strokeStyle='rgba(120,150,200,.25)';
+  ctx.lineWidth=1; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(cx,plot.top); ctx.lineTo(cx,plot.volBottom); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.strokeStyle='rgba(255,255,255,.15)';
+  ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(plot.left,hover.y); ctx.lineTo(plot.right,hover.y); ctx.stroke();
+  ctx.setLineDash([]);
+  const p = yPriceInv(hover.y);
+  ctx.fillStyle='#1a2330'; ctx.fillRect(plot.right, hover.y-9, PAD.right, 18);
+  ctx.strokeStyle='rgba(120,150,200,.5)';
+  ctx.strokeRect(plot.right, hover.y-9, PAD.right, 18);
+  ctx.fillStyle='#fff'; ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.font='11px "Segoe UI",sans-serif';
+  ctx.fillText(p.toFixed(2), plot.right+6, hover.y);
+}
+const yPriceInv = y => plot.pMax - (y-plot.top)/plot.height*(plot.pMax-plot.pMin);
+
+/* ============================================================
+ *  交互 / Interaction
+ * ============================================================ */
+canvas.addEventListener('mousemove', e=>{
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  let sIdx = Math.floor((x - plot.left)/plot.slot);
+  if(sIdx<0||sIdx>=plot.n){ hover=null; tooltip.style.display='none'; draw(); return; }
+  let bIdx = null;
+  if(y>=plot.top && y<=plot.bottom){
+    const price = yPriceInv(y);
+    const s = sessions[sIdx];
+    let best=1e9;
+    for(let b=0;b<s.bins.length;b++){
+      const d=Math.abs(s.bins[b].price - price);
+      if(d<best){best=d;bIdx=b;}
+    }
+  }
+  hover = { sessionIdx:sIdx, binIdx:(bIdx!==null&&bIdx>=0&&bIdx<sessions[sIdx].bins.length?bIdx:null), x, y };
+  updateTooltip(e);
+  draw();
+});
+canvas.addEventListener('mouseleave', ()=>{ hover=null; tooltip.style.display='none'; draw(); });
+
+function updateTooltip(e){
+  if(!hover) return;
+  const s = sessions[hover.sessionIdx];
+  const up = s.close>=s.open;
+  const chg = (s.close-s.open)/s.open*100;
+  const totBuy = s.buyVol, totSell = s.sellVol;
+  const buyPct = (totBuy/s.volume*100), sellPct=(totSell/s.volume*100);
+  const d = s.delta;
+  const dCls = d>=0?'pos':'neg';
+  const dSign = d>=0?'+':'';
+
+  const wrap = document.getElementById('chartWrap');
+  const rect = wrap.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  let html = `
+    <div class="ttitle">
+      <span>${s.date.getFullYear()}-${String(s.date.getMonth()+1).padStart(2,'0')}-${String(s.date.getDate()).padStart(2,'0')}</span>
+      <span class="ttag" style="background:${up?'rgba(255,77,79,.15)':'rgba(38,208,124,.15)'};color:${up?'#ff4d4f':'#26d07c'}">${up?'▲ 涨 Up':'▼ 跌 Down'} ${chg>=0?'+':''}${chg.toFixed(2)}%</span>
+    </div>
+    <div class="trow"><span>开 Open</span><b>${s.open.toFixed(2)}</b></div>
+    <div class="trow"><span>高 High</span><b>${s.high.toFixed(2)}</b></div>
+    <div class="trow"><span>低 Low</span><b>${s.low.toFixed(2)}</b></div>
+    <div class="trow"><span>收 Close</span><b>${s.close.toFixed(2)}</b></div>
+    <div class="tdivider"></div>
+    <div class="trow"><span class="kup">主买 Ask Vol</span><b class="kup">${totBuy.toFixed(0)} (${buyPct.toFixed(1)}%)</b></div>
+    <div class="trow"><span class="ksell">主卖 Bid Vol</span><b class="ksell">${totSell.toFixed(0)} (${sellPct.toFixed(1)}%)</b></div>
+    <div class="trow"><span>总成交量 Volume</span><b>${s.volume.toFixed(0)}</b></div>
+    <div class="trow"><span>净Delta Δ</span><b class="kdelta ${dCls}">${dSign}${d.toFixed(0)}</b></div>
+    <div class="tbar"><div class="b" style="width:${buyPct}%;background:var(--buy)"></div><div class="b" style="width:${sellPct}%;background:var(--sell)"></div></div>
+    <div class="tdivider"></div>
+    <div class="trow"><span class="kp">POC 控制点</span><b class="kpoc">${s.pocPrice.toFixed(2)}</b></div>
+    <div class="trow"><span>价值区 Value Area</span><b>${s.vaLow.toFixed(2)} – ${s.vaHigh.toFixed(2)}</b></div>
+  `;
+  if(hover.binIdx!==null){
+    const bin = s.bins[hover.binIdx];
+    const bDelta = bin.buy - bin.sell;
+    const bCls = bDelta>=0?'pos':'neg';
+    const side = bin.buyRatio>=0.5?'买方主导 Buyer-led':'卖方主导 Seller-led';
+    html += `
+      <div class="tdivider"></div>
+      <div class="tlevel">— 价格层 @ ${bin.price.toFixed(2)} / Level —</div>
+      <div class="trow"><span class="kup">层主买 Buy</span><b class="kup">${bin.buy.toFixed(0)}</b></div>
+      <div class="trow"><span class="ksell">层主卖 Sell</span><b class="ksell">${bin.sell.toFixed(0)}</b></div>
+      <div class="trow"><span>层Delta Δ</span><b class="kdelta ${bCls}">${bDelta>=0?'+':''}${bDelta.toFixed(0)}</b></div>
+      <div class="trow"><span>买方占比 Buy %</span><b>${(bin.buyRatio*100).toFixed(0)}% · ${side}</b></div>
+    `;
+  }
+  tooltip.innerHTML = html;
+  tooltip.style.display='block';
+  const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
+  let tx = mx + 16;
+  if(tx + tw > wrap.clientWidth) tx = mx - tw - 16;
+  let ty = my + 16;
+  if(ty + th > wrap.clientHeight) ty = Math.max(4, my - th - 8);
+  tooltip.style.left = tx+'px';
+  tooltip.style.top = ty+'px';
+}
+
+/* ---------- 控制按钮 / Controls ---------- */
+document.getElementById('btnView').onclick = function(){
+  view = view==='tanghulu'?'candle':'tanghulu';
+  this.textContent = view==='tanghulu'?'视图：糖胡芦图 / View: Tanghulu':'视图：传统K线 / View: Candlestick';
+  this.classList.toggle('active', view==='tanghulu');
+  draw();
+};
+document.getElementById('btnVA').onclick = function(){
+  showVA=!showVA; this.classList.toggle('active',showVA);
+  this.textContent = '价值区：'+(showVA?'显示 / Value Area: On':'隐藏 / Value Area: Off');
+  draw();
+};
+document.getElementById('btnPOC').onclick = function(){
+  showPOC=!showPOC; this.classList.toggle('active',showPOC);
+  this.textContent = 'POC金边：'+(showPOC?'显示 / POC: On':'隐藏 / POC: Off');
+  draw();
+};
+document.getElementById('btnGrid').onclick = function(){
+  showGrid=!showGrid; this.classList.toggle('active',showGrid);
+  this.textContent = '网格：'+(showGrid?'显示 / Grid: On':'隐藏 / Grid: Off');
+  draw();
+};
+document.getElementById('btnRegen').onclick = function(){
+  sessions = genSessions(35, Math.floor(Math.random()*1e9));
+  computeLayout(); draw();
+};
+
+/* ---------- 启动 / Init ---------- */
+sessions = genSessions(35, 20260706);
+window.addEventListener('resize', resize);
+resize();
+</script>
+</body>
+</html>

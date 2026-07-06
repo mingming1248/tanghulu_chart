@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>糖葫芦图 Tanghulu Chart · 中英双语版 Bilingual Edition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Sans+SC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#191b26;
+    --bg-deep:#12131c;
+    --panel:#22243330;
+    --panel-solid:#242838;
+    --panel-alt:#ffffff08;
+    --stall-wood:#5a3a22;
+    --stall-wood-light:#7a4f2c;
+    --wood:#a9713d;
+    --wood-dark:#6e4423;
+    --paper:#f3efe6;
+    --paper-dim:#c9c3b4;
+    --muted:#8b8a99;
+    --candy-red:#d6432f;
+    --candy-red-light:#ff8a73;
+    --candy-red-dark:#8e2417;
+    --candy-green:#4c9a6b;
+    --candy-green-light:#8fe3b0;
+    --candy-green-dark:#2c6b45;
+    --gold:#e8a33d;
+    --gold-light:#f4c24c;
+    --border:#ffffff14;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: radial-gradient(1200px 600px at 50% -10%, #262b3d 0%, var(--bg) 45%, var(--bg-deep) 100%);
+    color:var(--paper);
+    font-family:'Noto Sans SC', sans-serif;
+    min-height:100vh;
+    padding:28px 24px 60px;
+  }
+
+  /* ---------- Hero ---------- */
+  .hero{
+    max-width:1080px;
+    margin:0 auto 22px;
+    text-align:center;
+  }
+  .hero .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:.22em;
+    color:var(--gold-light);
+    text-transform:uppercase;
+    margin-bottom:6px;
+  }
+  .hero h1{
+    font-family:'Ma Shan Zheng', cursive;
+    font-size:56px;
+    line-height:1;
+    margin:0 0 4px;
+    color:var(--paper);
+    text-shadow: 0 0 26px rgba(230,150,60,.35), 0 2px 0 rgba(0,0,0,.4);
+    letter-spacing:.03em;
+  }
+  .hero .sub-en{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    color:var(--paper-dim);
+    letter-spacing:.12em;
+    margin-bottom:10px;
+  }
+  .hero p.desc{
+    max-width:640px;
+    margin:0 auto;
+    color:var(--muted);
+    font-size:13.5px;
+    line-height:1.7;
+  }
+  .hero p.desc-en{
+    margin-top:8px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11.5px;
+    color:#7d7c8c;
+    font-style:italic;
+    line-height:1.65;
+  }
+  .h1-en{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:15px;
+    font-style:normal;
+    color:var(--paper-dim);
+    letter-spacing:.06em;
+    vertical-align:middle;
+    margin-left:6px;
+  }
+  .bi{
+    display:block;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.82em;
+    color:var(--muted);
+    font-style:italic;
+    font-weight:400;
+    letter-spacing:.01em;
+  }
+  .bi-inline{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.86em;
+    color:#8b8a99;
+    font-style:italic;
+    margin-left:5px;
+  }
+
+  /* ---------- Controls ---------- */
+  .controls{
+    max-width:1080px;
+    margin:0 auto 18px;
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px 18px;
+    align-items:center;
+    justify-content:center;
+    background:var(--panel-alt);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:12px 18px;
+    backdrop-filter: blur(6px);
+  }
+  .ctrl-item{
+    display:flex; align-items:center; gap:7px;
+    font-size:12.5px; color:var(--paper-dim);
+    user-select:none;
+  }
+  .ctrl-item input[type="checkbox"]{
+    accent-color:var(--gold);
+    width:14px; height:14px; cursor:pointer;
+  }
+  .ctrl-item input[type="range"]{
+    accent-color:var(--gold);
+    width:110px;
+  }
+  .ctrl-item .val{
+    font-family:'IBM Plex Mono', monospace;
+    color:var(--gold-light);
+    min-width:20px;
+    display:inline-block;
+    text-align:right;
+  }
+  button.regen{
+    font-family:'Noto Sans SC', sans-serif;
+    font-size:12.5px;
+    font-weight:600;
+    color:#241305;
+    background:linear-gradient(180deg, var(--gold-light), var(--gold));
+    border:none;
+    border-radius:999px;
+    padding:8px 16px;
+    cursor:pointer;
+    box-shadow:0 3px 10px rgba(232,163,61,.35);
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  button.regen:hover{ transform:translateY(-1px); box-shadow:0 5px 14px rgba(232,163,61,.5); }
+  button.regen:active{ transform:translateY(0); }
+
+  /* ---------- Chart stall frame ---------- */
+  .stall{
+    max-width:1200px;
+    margin:0 auto;
+    border-radius:16px;
+    overflow:hidden;
+    background:var(--panel-solid);
+    border:1px solid var(--border);
+    box-shadow:0 30px 60px -20px rgba(0,0,0,.55);
+  }
+  .stall-bar{
+    height:10px;
+    background:repeating-linear-gradient(90deg, var(--stall-wood) 0 22px, var(--stall-wood-light) 22px 24px);
+  }
+  .chart-wrap{
+    position:relative;
+    overflow-x:auto;
+    padding:18px 10px 6px;
+  }
+  .chart-wrap::-webkit-scrollbar{ height:8px; }
+  .chart-wrap::-webkit-scrollbar-thumb{ background:var(--wood); border-radius:8px; }
+
+  svg#chart{ display:block; }
+  svg#chart text{ font-family:'IBM Plex Mono', monospace; }
+
+  #tooltip{
+    position:fixed;
+    pointer-events:none;
+    z-index:50;
+    background:linear-gradient(180deg, #2b2e40, #1f2130);
+    border:1px solid var(--gold);
+    border-radius:10px;
+    padding:10px 13px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11.5px;
+    line-height:1.65;
+    color:var(--paper);
+    box-shadow:0 10px 26px rgba(0,0,0,.5);
+    display:none;
+    min-width:230px;
+  }
+  #tooltip .tt-date{
+    font-family:'Noto Sans SC', sans-serif;
+    font-weight:700;
+    font-size:12.5px;
+    color:var(--gold-light);
+    margin-bottom:5px;
+    display:block;
+  }
+  #tooltip .row{ display:flex; justify-content:space-between; gap:14px; }
+  #tooltip .row span:first-child{ color:var(--muted); }
+  #tooltip .up{ color:var(--candy-red-light); }
+  #tooltip .down{ color:var(--candy-green-light); }
+  #tooltip hr{ border:none; border-top:1px solid var(--border); margin:6px 0; }
+
+  /* ---------- Legend ---------- */
+  .legend{
+    max-width:1200px;
+    margin:18px auto 0;
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(190px,1fr));
+    gap:10px 18px;
+    background:var(--panel-alt);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:16px 20px;
+  }
+  .legend h3{
+    grid-column:1/-1;
+    margin:0 0 4px;
+    font-size:13px;
+    color:var(--gold-light);
+    font-weight:700;
+    letter-spacing:.04em;
+  }
+  .legend-item{
+    display:flex; align-items:center; gap:10px;
+    font-size:12px; color:var(--paper-dim);
+  }
+  .legend-item svg{ flex:none; }
+  .legend-item b{ color:var(--paper); font-weight:600;}
+
+  footer{
+    max-width:1080px;
+    margin:26px auto 0;
+    text-align:center;
+    color:var(--muted);
+    font-size:11.5px;
+    line-height:1.8;
+  }
+  footer code{
+    background:#00000040;
+    padding:1px 6px;
+    border-radius:5px;
+    font-family:'IBM Plex Mono', monospace;
+  }
+
+  @media (max-width:640px){
+    .hero h1{ font-size:40px; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="hero">
+    <div class="eyebrow">Volume Profile · Per-Day Candy Skewer</div>
+    <h1>糖葫芦图 <span class="h1-en">Tanghulu Chart</span></h1>
+    <div class="sub-en">A PRICE · VOLUME FUSION CHART</div>
+    <p class="desc">
+      每一根"糖葫芦"代表一个交易日：串上不同大小的糖果代表不同价格层的成交量，
+      金圈标出 <b style="color:#f4c24c">POC 最大成交价</b>，暖色光晕圈出
+      <b style="color:#e8a33d">Value Area 主要成交区域</b>，木棍两端分别是最低价与最高价，
+      左侧空心结记开盘、右侧实心结记收盘。
+    </p>
+    <p class="desc desc-en">
+      Each "tanghulu" skewer represents one trading day: candies of different sizes strung along
+      the stick encode volume at each price level. The gold ring marks the
+      <b style="color:#f4c24c">POC</b> (highest-volume price), the warm glow band marks the
+      <b style="color:#e8a33d">Value Area</b> (the range holding ~70% of the day's volume), the
+      stick's two ends are Low and High, and the hollow knot (left) / solid knot (right) mark
+      Open and Close.
+    </p>
+  </div>
+
+  <div class="controls">
+    <label class="ctrl-item"><input type="checkbox" id="toggleVA" checked> 显示 Value Area<span class="bi-inline">Show Value Area</span></label>
+    <label class="ctrl-item"><input type="checkbox" id="togglePOC" checked> 显示 POC 标记<span class="bi-inline">Show POC</span></label>
+    <label class="ctrl-item"><input type="checkbox" id="toggleTrend"> 显示收盘趋势线<span class="bi-inline">Close Trend Line</span></label>
+    <label class="ctrl-item"><input type="checkbox" id="toggleVolBar" checked> 显示成交量条<span class="bi-inline">Volume Bars</span></label>
+    <label class="ctrl-item">价格分层数<span class="bi-inline">Price Bins</span>
+      <input type="range" id="binSlider" min="8" max="36" value="20">
+      <span class="val" id="binVal">20</span>
+    </label>
+    <button class="regen" id="regenBtn">🔄 重新生成行情 <span class="bi-inline" style="color:#6b4a10">Regenerate</span></button>
+  </div>
+
+  <div class="stall">
+    <div class="stall-bar"></div>
+    <div class="chart-wrap" id="chartWrap">
+      <svg id="chart"></svg>
+    </div>
+    <div class="stall-bar"></div>
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+  <footer>
+    数据为统计模拟生成，用于演示"价格分层 + 成交量分布"的图形编码方式；
+    真实场景下可将 <code>computeVolumeProfile()</code> 替换为基于逐笔成交 / Level2 数据的真实统计，接口保持不变。<br>
+    <span class="bi">Data is statistically simulated to demonstrate the "price-binned volume distribution" encoding;
+    in production, swap <code>computeVolumeProfile()</code> for real tick / Level-2 aggregation — the downstream interface is unchanged.</span>
+    <br><br>
+    Prototype for illustration only · Not investment advice. ／ 原型演示用途，不构成投资建议。
+  </footer>
+
+  <div id="tooltip"></div>
+
+<script>
+/* =========================================================================
+   糖葫芦图 Tanghulu Chart — 核心引擎
+   结构:
+   1. 配置 CONFIG
+   2. 数据模拟层  generateDataset() / makeProfileParams() / computeVolumeProfile()
+   3. 统计计算层  computePOCandVA()
+   4. 渲染层      renderChart()  (纯函数式重绘, 不依赖第三方图表库)
+   5. 交互层      tooltip / controls
+   ========================================================================= */
+
+/* ---------------------- 1. 配置 ---------------------- */
+const CONFIG = {
+  DAYS: 30,
+  DX: 46,                // 每个交易日的水平间距(px)
+  MARGIN_LEFT: 62,
+  MARGIN_RIGHT: 34,
+  TOP_PAD: 26,
+  PRICE_CHART_H: 460,
+  GAP1: 12,
+  VOL_H: 56,
+  GAP2: 8,
+  LABEL_H: 46,
+  BOTTOM_PAD: 8,
+  MIN_R: 2.2,
+  MAX_R: 16.5,
+};
+
+/* ---------------------- 2. 数据模拟层 ---------------------- */
+
+// 可复现的伪随机数生成器 (同一天的分布形态在切换分层数时保持稳定)
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function gaussian(x, mu, sigma) {
+  if (sigma <= 0) sigma = 1e-4;
+  const z = (x - mu) / sigma;
+  return Math.exp(-0.5 * z * z);
+}
+
+// 为一天生成"成交量分布形态参数"——真实接入逐笔数据时，可跳过本函数，
+// 直接把 tick 数据聚合进 computeVolumeProfile 所需的 bins 结构即可。
+function makeProfileParams(type, low, high, seed) {
+  const rnd = mulberry32(seed);
+  const range = high - low;
+  if (type === 'bimodal') {
+    return {
+      type,
+      mu1: low + range * (0.15 + rnd() * 0.15),
+      mu2: low + range * (0.60 + rnd() * 0.25),
+      sigma1: range * (0.06 + rnd() * 0.05),
+      sigma2: range * (0.06 + rnd() * 0.05),
+      w1: 0.35 + rnd() * 0.3,
+    };
+  }
+  if (type === 'skewed') {
+    const mu = low + range * (0.3 + rnd() * 0.4);
+    let sL = range * (0.06 + rnd() * 0.05);
+    let sR = range * (0.16 + rnd() * 0.10);
+    if (rnd() < 0.5) { const t = sL; sL = sR; sR = t; }
+    return { type, mu, sigmaL: sL, sigmaR: sR };
+  }
+  // normal (default)
+  return {
+    type: 'normal',
+    mu: low + range * (0.35 + rnd() * 0.3),
+    sigma: range * (0.12 + rnd() * 0.08),
+  };
+}
+
+// 生成约30个交易日的模拟 OHLCV 行情
+function generateDataset(n) {
+  const days = [];
+  let cur = new Date(2025, 4, 1); // 起始日期(可随意调整)
+  let prevClose = 100 + Math.random() * 20;
+  const distTypes = ['normal', 'bimodal', 'skewed'];
+
+  for (let i = 0; i < n; i++) {
+    while (cur.getDay() === 0 || cur.getDay() === 6) cur.setDate(cur.getDate() + 1);
+    const date = new Date(cur);
+
+    const gap = prevClose * (Math.random() * 0.02 - 0.01);
+    const open = prevClose + gap;
+    const drift = (Math.random() - 0.48) * 0.05;
+    const close = open * (1 + drift);
+    const hiExtra = Math.random() * 0.016 + 0.002;
+    const loExtra = Math.random() * 0.016 + 0.002;
+    const high = Math.max(open, close) * (1 + hiExtra);
+    const low = Math.min(open, close) * (1 - loExtra);
+    const volume = Math.round(420000 + Math.random() * 1_650_000);
+
+    const distType = distTypes[Math.floor(Math.random() * distTypes.length)];
+    const seed = (i + 1) * 7919 + Math.floor(Math.random() * 100000);
+    const params = makeProfileParams(distType, low, high, seed);
+
+    days.push({
+      date, open, high, low, close, volume,
+      distType, params, seed,
+    });
+
+    prevClose = close;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return days;
+}
+
+// 将 Low~High 划分为 N 个价格层, 计算每层的模拟成交量。
+// 未来接入真实逐笔数据: 用 tick 的 (price, size) 按同样的 bin 边界累加即可，
+// 下游 computePOCandVA() / renderChart() 无需改动。
+function computeVolumeProfile(day, bins) {
+  const { low, high, volume, params, seed } = day;
+  const step = (high - low) / bins;
+  const rnd = mulberry32(seed + 777); // 独立噪声流
+  const weights = [];
+
+  for (let i = 0; i < bins; i++) {
+    const mid = low + step * (i + 0.5);
+    let w;
+    if (params.type === 'bimodal') {
+      w = params.w1 * gaussian(mid, params.mu1, params.sigma1) +
+          (1 - params.w1) * gaussian(mid, params.mu2, params.sigma2);
+    } else if (params.type === 'skewed') {
+      const sigma = mid < params.mu ? params.sigmaL : params.sigmaR;
+      w = gaussian(mid, params.mu, sigma);
+    } else {
+      w = gaussian(mid, params.mu, params.sigma);
+    }
+    const noise = 0.85 + rnd() * 0.3;
+    weights.push(Math.max(w * noise, 0.0008));
+  }
+
+  const sum = weights.reduce((a, b) => a + b, 0);
+  return weights.map((w, i) => ({
+    idx: i,
+    low: low + step * i,
+    high: low + step * (i + 1),
+    mid: low + step * (i + 0.5),
+    volume: (w / sum) * volume,
+  }));
+}
+
+/* ---------------------- 3. 统计计算层 ---------------------- */
+
+// POC (成交量最大的价格层) + Value Area (累计约70%成交量的连续价格区间)
+// 标准做法: 从 POC 出发, 每次向上/向下两侧中"成交量更大"的一侧扩展一层，
+// 直至累计占比达到目标(默认70%)。
+function computePOCandVA(binsData, totalVolume, targetPct = 0.70) {
+  let pocIdx = 0;
+  for (let i = 1; i < binsData.length; i++) {
+    if (binsData[i].volume > binsData[pocIdx].volume) pocIdx = i;
+  }
+  let lo = pocIdx, hi = pocIdx;
+  let cum = binsData[pocIdx].volume;
+  const target = totalVolume * targetPct;
+
+  while (cum < target && (lo > 0 || hi < binsData.length - 1)) {
+    const volLoNext = lo > 0 ? binsData[lo - 1].volume : -1;
+    const volHiNext = hi < binsData.length - 1 ? binsData[hi + 1].volume : -1;
+    if (volLoNext >= volHiNext) { lo -= 1; cum += binsData[lo].volume; }
+    else { hi += 1; cum += binsData[hi].volume; }
+  }
+
+  return {
+    pocIdx,
+    pocPrice: binsData[pocIdx].mid,
+    pocVolume: binsData[pocIdx].volume,
+    vaLoIdx: lo, vaHiIdx: hi,
+    vaLowPrice: binsData[lo].low,
+    vaHighPrice: binsData[hi].high,
+    vaVolume: cum,
+    vaPct: cum / totalVolume,
+  };
+}
+
+/* ---------------------- 4. 渲染层 ---------------------- */
+
+let DATASET = generateDataset(CONFIG.DAYS);
+const DIST_LABEL = { normal: '正态分布 Normal', bimodal: '双峰分布 Bimodal', skewed: '偏态分布 Skewed' };
+
+function fmtDate(d) {
+  const p = (x) => String(x).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function fmtPrice(v) { return v.toFixed(2); }
+function fmtVol(v) {
+  if (v >= 1_000_000) return (v / 1_000_000).toFixed(2) + 'M';
+  if (v >= 1_000) return (v / 1_000).toFixed(1) + 'K';
+  return String(Math.round(v));
+}
+
+function radiusForVolume(v, globalMax) {
+  const ratio = Math.max(v, 0) / globalMax;
+  return CONFIG.MIN_R + (CONFIG.MAX_R - CONFIG.MIN_R) * Math.sqrt(ratio);
+}
+
+function renderChart() {
+  const bins = parseInt(document.getElementById('binSlider').value, 10);
+  const showVA = document.getElementById('toggleVA').checked;
+  const showPOC = document.getElementById('togglePOC').checked;
+  const showTrend = document.getElementById('toggleTrend').checked;
+  const showVolBar = document.getElementById('toggleVolBar').checked;
+
+  // 逐日计算量能分布 / POC / VA
+  const days = DATASET.map((d) => {
+    const binsData = computeVolumeProfile(d, bins);
+    const stats = computePOCandVA(binsData, d.volume);
+    return { ...d, binsData, stats };
+  });
+
+  const globalMaxBinVol = Math.max(...days.flatMap((d) => d.binsData.map((b) => b.volume)));
+  const globalMaxDayVol = Math.max(...days.map((d) => d.volume));
+  const priceLow = Math.min(...days.map((d) => d.low));
+  const priceHigh = Math.max(...days.map((d) => d.high));
+  const pad = (priceHigh - priceLow) * 0.06;
+  const pMin = priceLow - pad, pMax = priceHigh + pad;
+
+  const C = CONFIG;
+  const chartInnerW = days.length * C.DX;
+  const width = C.MARGIN_LEFT + chartInnerW + C.MARGIN_RIGHT;
+  const height = C.TOP_PAD + C.PRICE_CHART_H + C.GAP1 + C.VOL_H + C.GAP2 + C.LABEL_H + C.BOTTOM_PAD;
+
+  const yScale = (price) => C.TOP_PAD + (pMax - price) / (pMax - pMin) * C.PRICE_CHART_H;
+  const xOf = (i) => C.MARGIN_LEFT + i * C.DX + C.DX / 2;
+
+  const volBarTop = C.TOP_PAD + C.PRICE_CHART_H + C.GAP1;
+  const volBarBase = volBarTop + C.VOL_H;
+  const labelY = volBarBase + C.GAP2 + 8;
+
+  let svg = `<svg id="chart" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">`;
+
+  svg += `<defs>
+    <radialGradient id="gradRed" cx="35%" cy="28%" r="75%">
+      <stop offset="0%" stop-color="${cssvar('--candy-red-light','#ff8a73')}"/>
+      <stop offset="55%" stop-color="${cssvar('--candy-red','#d6432f')}"/>
+      <stop offset="100%" stop-color="${cssvar('--candy-red-dark','#8e2417')}"/>
+    </radialGradient>
+    <radialGradient id="gradGreen" cx="35%" cy="28%" r="75%">
+      <stop offset="0%" stop-color="${cssvar('--candy-green-light','#8fe3b0')}"/>
+      <stop offset="55%" stop-color="${cssvar('--candy-green','#4c9a6b')}"/>
+      <stop offset="100%" stop-color="${cssvar('--candy-green-dark','#2c6b45')}"/>
+    </radialGradient>
+    <linearGradient id="gradWood" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="${cssvar('--wood-dark','#6e4423')}"/>
+      <stop offset="50%" stop-color="${cssvar('--wood','#a9713d')}"/>
+      <stop offset="100%" stop-color="${cssvar('--wood-dark','#6e4423')}"/>
+    </linearGradient>
+  </defs>`;
+
+  // --- 背景: 交替日期柱状底纹 + 网格线 ---
+  days.forEach((d, i) => {
+    if (i % 2 === 0) {
+      svg += rect(C.MARGIN_LEFT + i * C.DX, 0, C.DX, height, 'rgba(255,255,255,0.02)');
+    }
+  });
+  const gridN = 6;
+  for (let g = 0; g <= gridN; g++) {
+    const price = pMin + (pMax - pMin) * (g / gridN);
+    const y = yScale(price);
+    svg += line(C.MARGIN_LEFT, y, C.MARGIN_LEFT + chartInnerW, y, 'rgba(255,255,255,0.07)', 1);
+    svg += text(C.MARGIN_LEFT - 8, y + 3, fmtPrice(price), 'end', 10, 'var(--muted)');
+  }
+
+  // --- 逐日绘制 "糖葫芦" ---
+  days.forEach((d, i) => {
+    const x = xOf(i);
+    const isUp = d.close >= d.open;
+    const grad = isUp ? 'url(#gradRed)' : 'url(#gradGreen)';
+    const { stats, binsData } = d;
+
+    // Value Area 光晕带
+    if (showVA) {
+      svg += rect(
+        x - C.DX / 2 + 5, yScale(stats.vaHighPrice),
+        C.DX - 10, yScale(stats.vaLowPrice) - yScale(stats.vaHighPrice),
+        'rgba(232,163,61,0.14)', 'rgba(232,163,61,0.4)', 6
+      );
+    }
+
+    // 木棍 (Low~High), 两端露出一点仿竹签尖
+    const yTop = yScale(d.high), yBot = yScale(d.low);
+    svg += `<line x1="${x}" y1="${yTop - 5}" x2="${x}" y2="${yBot + 5}" stroke="url(#gradWood)" stroke-width="3.4" stroke-linecap="round"/>`;
+
+    // 糖果串 (每个价格层一颗)
+    binsData.forEach((b) => {
+      const r = radiusForVolume(b.volume, globalMaxBinVol);
+      const y = yScale(b.mid);
+      const inVA = b.idx >= stats.vaLoIdx && b.idx <= stats.vaHiIdx;
+      const isPOC = b.idx === stats.pocIdx;
+      const opacity = inVA ? 1 : 0.32;
+      svg += `<circle cx="${x}" cy="${y}" r="${r.toFixed(2)}" fill="${grad}" fill-opacity="${opacity}"
+        stroke="${isPOC && showPOC ? cssvar('--gold-light','#f4c24c') : 'rgba(0,0,0,0.25)'}"
+        stroke-width="${isPOC && showPOC ? 2.6 : 0.6}" />`;
+      if (isPOC && showPOC) {
+        svg += `<circle cx="${x}" cy="${y}" r="${(r + 5).toFixed(2)}" fill="none" stroke="${cssvar('--gold-light','#f4c24c')}" stroke-width="1" stroke-dasharray="2,3" opacity="0.7"/>`;
+      }
+    });
+
+    // 开盘(左, 空心结) / 收盘(右, 实心结)
+    const yOpen = yScale(d.open), yClose = yScale(d.close);
+    svg += `<line x1="${x - 11}" y1="${yOpen}" x2="${x - 1}" y2="${yOpen}" stroke="var(--paper)" stroke-width="2"/>`;
+    svg += `<circle cx="${x - 12}" cy="${yOpen}" r="2.6" fill="none" stroke="var(--paper)" stroke-width="1.6"/>`;
+    svg += `<line x1="${x + 1}" y1="${yClose}" x2="${x + 11}" y2="${yClose}" stroke="var(--paper)" stroke-width="2"/>`;
+    svg += `<circle cx="${x + 12}" cy="${yClose}" r="2.8" fill="var(--paper)"/>`;
+
+    // 成交量迷你条
+    if (showVolBar) {
+      const bh = (d.volume / globalMaxDayVol) * C.VOL_H;
+      svg += rect(x - 8, volBarBase - bh, 16, bh, isUp ? 'rgba(214,67,47,0.55)' : 'rgba(76,154,107,0.55)', null, 3);
+    }
+
+    // 日期标签
+    svg += `<text x="${x}" y="${labelY}" font-size="9.5" fill="var(--muted)" text-anchor="end" transform="rotate(-42 ${x} ${labelY})">${fmtDate(d.date)}</text>`;
+
+    // 透明命中区(整柱高度), 用于 tooltip
+    svg += `<rect class="dayhit" data-idx="${i}" x="${x - C.DX / 2}" y="0" width="${C.DX}" height="${height}" fill="transparent" style="cursor:crosshair"/>`;
+  });
+
+  // --- 收盘趋势线 ---
+  if (showTrend) {
+    const pts = days.map((d, i) => `${xOf(i)},${yScale(d.close)}`).join(' ');
+    svg += `<polyline points="${pts}" fill="none" stroke="var(--paper)" stroke-width="1.4" stroke-dasharray="4,4" opacity="0.55"/>`;
+  }
+
+  // --- 分隔线: 主图 / 量能条 ---
+  svg += line(C.MARGIN_LEFT, volBarTop - 6, C.MARGIN_LEFT + chartInnerW, volBarTop - 6, 'rgba(255,255,255,0.08)', 1);
+  svg += text(C.MARGIN_LEFT - 8, volBarBase - 9, '成交量', 'end', 9.5, 'var(--muted)');
+  svg += text(C.MARGIN_LEFT - 8, volBarBase + 2, 'Volume', 'end', 8, 'var(--muted)');
+
+  svg += `</svg>`;
+
+  const wrap = document.getElementById('chartWrap');
+  wrap.innerHTML = svg;
+  attachTooltip(days, C.DX);
+}
+
+function cssvar(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name);
+  return v ? v.trim() : fallback;
+}
+function rect(x, y, w, h, fill, stroke, rx) {
+  return `<rect x="${x}" y="${y}" width="${Math.max(w,0)}" height="${Math.max(h,0)}" fill="${fill}" ${stroke ? `stroke="${stroke}" stroke-width="1"` : ''} ${rx ? `rx="${rx}"` : ''}/>`;
+}
+function line(x1, y1, x2, y2, stroke, w) {
+  return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${stroke}" stroke-width="${w}"/>`;
+}
+function text(x, y, str, anchor, size, fill) {
+  return `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${size}" fill="${fill}">${str}</text>`;
+}
+
+/* ---------------------- 5. 交互层 ---------------------- */
+function attachTooltip(days, dx) {
+  const tip = document.getElementById('tooltip');
+  document.querySelectorAll('.dayhit').forEach((el) => {
+    const i = parseInt(el.getAttribute('data-idx'), 10);
+    const d = days[i];
+    el.addEventListener('mousemove', (e) => {
+      const isUp = d.close >= d.open;
+      const changePct = ((d.close - d.open) / d.open * 100).toFixed(2);
+      tip.innerHTML = `
+        <span class="tt-date">${fmtDate(d.date)}　<span class="${isUp ? 'up' : 'down'}">${isUp ? '▲' : '▼'} ${changePct}%</span></span>
+        <div class="row"><span>开盘 Open</span><span>${fmtPrice(d.open)}</span></div>
+        <div class="row"><span>收盘 Close</span><span>${fmtPrice(d.close)}</span></div>
+        <div class="row"><span>最高 High</span><span>${fmtPrice(d.high)}</span></div>
+        <div class="row"><span>最低 Low</span><span>${fmtPrice(d.low)}</span></div>
+        <div class="row"><span>成交量 Volume</span><span>${fmtVol(d.volume)}</span></div>
+        <hr>
+        <div class="row"><span style="color:#f4c24c">POC 价格 POC Price</span><span>${fmtPrice(d.stats.pocPrice)}</span></div>
+        <div class="row"><span style="color:#e8a33d">价值区域 Value Area</span><span>${fmtPrice(d.stats.vaLowPrice)} ~ ${fmtPrice(d.stats.vaHighPrice)}</span></div>
+        <div class="row"><span>VA 占比 VA Share</span><span>${(d.stats.vaPct * 100).toFixed(1)}%</span></div>
+        <div class="row"><span>分布类型 Distribution</span><span>${DIST_LABEL[d.distType]}</span></div>
+      `;
+      tip.style.display = 'block';
+      const wrapRect = document.getElementById('chartWrap').getBoundingClientRect();
+      let left = e.clientX + 16, top = e.clientY - 10;
+      if (left + 210 > window.innerWidth) left = e.clientX - 226;
+      tip.style.left = left + 'px';
+      tip.style.top = top + 'px';
+    });
+    el.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+  });
+}
+
+/* ---------------------- Legend ---------------------- */
+function renderLegend() {
+  const legend = document.getElementById('legend');
+  legend.innerHTML = `
+    <h3>图形语言 · How to read it</h3>
+    <div class="legend-item"><svg width="34" height="24"><circle cx="17" cy="12" r="9" fill="url(#gradRed)"/></svg> <span><b>糖果大小</b> = 该价格层成交量(面积编码)<span class="bi">Candy size = volume at that price level (area-encoded)</span></span></div>
+    <div class="legend-item"><svg width="34" height="24"><circle cx="17" cy="12" r="8" fill="url(#gradRed)" fill-opacity="0.3"/></svg> <span><b>暗淡糖果</b> = 该层在 Value Area 之外<span class="bi">Dim candy = outside the Value Area</span></span></div>
+    <div class="legend-item"><svg width="34" height="24"><circle cx="17" cy="12" r="7" fill="url(#gradRed)" stroke="#f4c24c" stroke-width="2.4"/></svg> <span><b>金圈</b> = POC 最大成交量价格<span class="bi">Gold ring = POC, the highest-volume price</span></span></div>
+    <div class="legend-item"><svg width="34" height="24"><rect x="2" y="4" width="30" height="16" rx="4" fill="rgba(232,163,61,0.25)" stroke="rgba(232,163,61,0.6)"/></svg> <span><b>暖色光带</b> = Value Area 主要成交区域(≈70%量)<span class="bi">Warm glow band = Value Area (~70% of volume)</span></span></div>
+    <div class="legend-item"><svg width="34" height="24"><line x1="17" y1="2" x2="17" y2="22" stroke="url(#gradWood)" stroke-width="3.4"/></svg> <span><b>木棍</b> = 当日 Low ~ High 区间<span class="bi">Wooden stick = the day's Low–High range</span></span></div>
+    <div class="legend-item"><svg width="34" height="24"><line x1="6" y1="12" x2="16" y2="12" stroke="#f3efe6" stroke-width="2"/><circle cx="5" cy="12" r="2.6" fill="none" stroke="#f3efe6" stroke-width="1.6"/></svg> <span><b>空心结(左)</b> = 开盘价 Open<span class="bi">Hollow knot (left) = Open price</span></span></div>
+    <div class="legend-item"><svg width="34" height="24"><line x1="18" y1="12" x2="28" y2="12" stroke="#f3efe6" stroke-width="2"/><circle cx="29" cy="12" r="2.8" fill="#f3efe6"/></svg> <span><b>实心结(右)</b> = 收盘价 Close<span class="bi">Solid knot (right) = Close price</span></span></div>
+    <div class="legend-item"><svg width="34" height="24"><rect x="12" y="4" width="10" height="16" fill="rgba(214,67,47,0.55)" rx="2"/></svg> <span><b>底部小条</b> = 当日总成交量(横向对比)<span class="bi">Bottom mini-bar = total daily volume (for comparison)</span></span></div>
+    <div class="legend-item"><span style="color:#ff8a73">●</span><span><b>红色糖葫芦</b> = 收盘 ≥ 开盘(上涨日)<span class="bi">Red skewer = Close ≥ Open (up day)</span></span></div>
+    <div class="legend-item"><span style="color:#8fe3b0">●</span><span><b>绿色糖葫芦</b> = 收盘 &lt; 开盘(下跌日)<span class="bi">Green skewer = Close &lt; Open (down day)</span></span></div>
+  `;
+}
+
+/* ---------------------- 初始化 & 事件绑定 ---------------------- */
+document.getElementById('binSlider').addEventListener('input', (e) => {
+  document.getElementById('binVal').textContent = e.target.value;
+  renderChart();
+});
+['toggleVA', 'togglePOC', 'toggleTrend', 'toggleVolBar'].forEach((id) => {
+  document.getElementById(id).addEventListener('change', renderChart);
+});
+document.getElementById('regenBtn').addEventListener('click', () => {
+  DATASET = generateDataset(CONFIG.DAYS);
+  renderChart();
+});
+
+renderLegend();
+renderChart();
+</script>
+</body>
+</html>

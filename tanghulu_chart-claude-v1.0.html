@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>糖葫芦K线图 · 一种把成交量"穿"进价格里的可视化</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --bg: #0b0d10;
+    --panel: #12151a;
+    --panel-2: #161a20;
+    --grid: #232830;
+    --grid-soft: #1a1e24;
+    --text-main: #e8e6e1;
+    --text-dim: #868c96;
+    --text-faint: #565c66;
+    --up: #e6483c;
+    --up-dim: rgba(230,72,60,0.42);
+    --down: #1fae6f;
+    --down-dim: rgba(31,174,111,0.42);
+    --stick: #c9a06a;
+    --accent: #d9a441;
+  }
+
+  *{ box-sizing: border-box; }
+
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--text-main);
+    font-family: 'IBM Plex Mono', 'SF Mono', Menlo, monospace;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap{
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 36px 24px 64px;
+  }
+
+  header{
+    border-bottom: 1px solid var(--grid);
+    padding-bottom: 20px;
+    margin-bottom: 28px;
+    display:flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  h1{
+    font-family: 'Noto Serif SC', serif;
+    font-weight: 900;
+    font-size: 30px;
+    margin: 0 0 6px 0;
+    letter-spacing: 0.5px;
+  }
+  h1 span{ color: var(--accent); }
+
+  .subtitle{
+    color: var(--text-dim);
+    font-size: 13.5px;
+    margin: 0;
+  }
+
+  .tag{
+    font-size: 11px;
+    color: var(--text-faint);
+    border: 1px solid var(--grid);
+    padding: 5px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  .panel{
+    background: var(--panel);
+    border: 1px solid var(--grid);
+    border-radius: 10px;
+    padding: 18px 18px 8px;
+    margin-bottom: 22px;
+    position: relative;
+  }
+
+  .panel-title{
+    font-size: 12px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin: 0 0 10px 2px;
+  }
+
+  #chartHost, #compareHost, #explainHost{ position: relative; width: 100%; }
+  canvas{ display:block; width:100%; }
+
+  .controls{
+    display:flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin: -6px 0 18px;
+  }
+
+  button.toggle{
+    background: var(--panel-2);
+    border: 1px solid var(--grid);
+    color: var(--text-main);
+    font-family: inherit;
+    font-size: 12.5px;
+    padding: 8px 14px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: border-color .15s, color .15s;
+  }
+  button.toggle:hover{ border-color: var(--accent); color: var(--accent); }
+  button.toggle.active{ border-color: var(--accent); color: var(--accent); }
+
+  .hidden{ display:none !important; }
+
+  .tooltip{
+    position: absolute;
+    pointer-events: none;
+    background: rgba(10,12,15,0.95);
+    border: 1px solid var(--grid);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 1.65;
+    color: var(--text-main);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+    white-space: nowrap;
+    z-index: 20;
+  }
+  .tooltip .row{ display:flex; justify-content: space-between; gap: 16px; }
+  .tooltip .k{ color: var(--text-dim); }
+  .tooltip .up{ color: var(--up); }
+  .tooltip .down{ color: var(--down); }
+  .tooltip .hd{ color: var(--accent); font-weight:600; margin-bottom: 4px; }
+
+  /* ---- legend / explanation ---- */
+  .legend-grid{
+    display:grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 26px;
+    align-items: start;
+  }
+  @media (max-width: 860px){ .legend-grid{ grid-template-columns: 1fr; } }
+
+  .legend h2{
+    font-family: 'Noto Serif SC', serif;
+    font-size: 17px;
+    margin: 0 0 12px;
+    color: var(--text-main);
+  }
+  .legend p{
+    font-size: 13px;
+    line-height: 1.85;
+    color: #c7c9cd;
+    margin: 0 0 12px;
+  }
+  .legend p b{ color: var(--text-main); }
+  .legend code{
+    background: var(--panel-2);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--accent);
+  }
+
+  .swatches{ list-style:none; margin: 0 0 18px; padding:0; }
+  .swatches li{
+    display:flex; align-items:center; gap: 10px;
+    font-size: 13px; color: #c7c9cd;
+    margin-bottom: 9px;
+  }
+  .sw{ width:22px; height:14px; border-radius: 3px; flex: 0 0 auto; }
+  .sw.body-up{ background: var(--up); }
+  .sw.body-down{ background: var(--down); }
+  .sw.wick-up{ background: var(--up-dim); }
+  .sw.wick-down{ background: var(--down-dim); }
+  .sw.stick{ background: var(--stick); height: 3px; margin: 5.5px 0; }
+  .sw.width{ background: linear-gradient(90deg, var(--panel-2), var(--accent), var(--panel-2)); height: 16px; border-radius: 8px; }
+
+  .foot-note{
+    font-size: 11.5px;
+    color: var(--text-faint);
+    border-top: 1px solid var(--grid);
+    padding-top: 14px;
+    margin-top: 6px;
+    line-height: 1.8;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>糖葫芦<span>K线图</span></h1>
+      <p class="subtitle">把成交量“穿”进价格里 — K线宽度不再固定，而是随每个价格水平的成交量起伏</p>
+    </div>
+    <div class="tag">模拟数据 · 概念演示 · 30 个交易日</div>
+  </header>
+
+  <div class="panel">
+    <div class="panel-title">主图 · 糖葫芦 K 线（宽度 = 该价格水平成交量）</div>
+    <div id="chartHost">
+      <canvas id="mainChart"></canvas>
+      <div id="tooltip" class="tooltip hidden"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="toggle" id="btnCompare">对比传统 K 线 + 成交量柱</button>
+    <button class="toggle" id="btnExplain">看一根放大的“糖葫芦”</button>
+  </div>
+
+  <div class="panel hidden" id="comparePanel">
+    <div class="panel-title">对比 · 传统等宽 K 线（成交量单独画在下方）</div>
+    <div id="compareHost"><canvas id="compareChart"></canvas></div>
+  </div>
+
+  <div class="panel hidden" id="explainPanel">
+    <div class="panel-title">拆解 · 一根糖葫芦K线是怎么“串”起来的</div>
+    <div id="explainHost"><canvas id="explainChart"></canvas></div>
+  </div>
+
+  <div class="panel legend">
+    <div class="legend-grid">
+      <div>
+        <h2>怎么读这根“糖葫芦”</h2>
+        <p><b>横轴还是时间，纵轴还是价格</b> —— 这一点和普通K线一样。唯一的区别是：每根K线不再是固定宽度的矩形，而是被切成 <code>N=50</code> 个价格切片，每个切片的<b>宽度和它在当天的成交量成正比</b>。切片从最低价一路叠到最高价，宽度忽宽忽窄，整体看起来就像一颗被穿在竹签上、中间胖两头尖的糖葫芦。</p>
+        <p><b>颜色分区</b>：从开盘价到收盘价这一段是"实体"，颜色饱和（红涨绿跌，沿用国内习惯）；实体上方到最高价、下方到最低价的部分是"影线"，用同色但更淡的色调表示，对应传统K线里的上下影线。</p>
+        <p><b>形状本身就是信息</b>：如果某根K线在某个价位特别"鼓"，说明当天在这个价位附近成交特别密集——这个价位很可能会成为之后的支撑或阻力。如果糖葫芦两头尖、中间圆润，说明成交量高度集中在均价附近；如果形状歪向一头，说明筹码在偏离均价的地方也堆积了不少。</p>
+        <p><b>竹签</b>：贯穿最高价到最低价的那根细线只是装饰，用来强化"糖葫芦"的造型联想，不携带额外数据。</p>
+        <p><b>整根K线的最大宽度</b> 还会跟其他交易日比较：当天总成交量越大，这根糖葫芦能达到的最大宽度上限就越高——所以横向比较不同日期，也能大致看出哪天更"放量"。</p>
+      </div>
+      <div>
+        <h2>图例</h2>
+        <ul class="swatches">
+          <li><span class="sw body-up"></span> 实体（上涨日，收盘&gt;开盘）</li>
+          <li><span class="sw body-down"></span> 实体（下跌日，收盘&lt;开盘）</li>
+          <li><span class="sw wick-up"></span> 上/下影线（上涨日，颜色变淡）</li>
+          <li><span class="sw wick-down"></span> 上/下影线（下跌日，颜色变淡）</li>
+          <li><span class="sw stick"></span> 竹签：连接最高价与最低价，纯装饰</li>
+          <li><span class="sw width"></span> 宽度渐变 = 成交量从少 → 多 → 少</li>
+        </ul>
+        <div class="foot-note">
+          <b>数据是怎么模拟的：</b><br>
+          1. 用带漂移的随机游走生成 30 个交易日的开/高/低/收与当日总成交量；<br>
+          2. 把每天的 [最低价, 最高价] 等分成 50 个价格切片；<br>
+          3. 每个切片的"相对成交量"取自以 <code>均值 = (开盘+收盘)/2</code>、<code>标准差 = (最高-最低)/4</code> 的高斯分布在该切片中点的密度值，并叠加少量随机噪声模拟真实市场的不规则性；<br>
+          4. 把 50 个切片的相对成交量归一化后，按当天真实总成交量等比缩放，得到每个价格切片的具体成交量，也就是这根K线在该价位的宽度。<br><br>
+          真实场景中，第 2–3 步需要逐笔成交或分钟级 Level-2 数据才能还原出真正的"量在价上"分布，这里用高斯分布做了简化模拟。
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+
+  // ---------- 0. PRNG（可复现的伪随机数）----------
+  function mulberry32(seed){
+    return function(){
+      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const rand = mulberry32(20260705);
+
+  // ---------- 1. 生成模拟行情数据（30 个交易日）----------
+  const NUM_DAYS = 30;
+  const NUM_SLICES = 50;
+
+  function genTradingDates(n){
+    const dates = [];
+    let d = new Date(2026, 4, 4); // 起始日期（周一附近），只是用来生成一串交易日
+    while(dates.length < n){
+      d.setDate(d.getDate() + 1);
+      const wd = d.getDay();
+      if(wd !== 0 && wd !== 6) dates.push(new Date(d));
+    }
+    return dates;
+  }
+
+  function genDays(){
+    const dates = genTradingDates(NUM_DAYS);
+    const days = [];
+    let price = 42.50;
+    for(let i=0;i<NUM_DAYS;i++){
+      const drift = (rand() - 0.46) * 1.1;
+      const open = price;
+      let close = open + drift + (rand() - 0.5) * 1.6;
+      close = Math.max(close, 3);
+      const bodyRange = Math.abs(close - open);
+      const extra = bodyRange + rand() * 1.8 + 0.4;
+      const high = Math.max(open, close) + rand() * extra * 0.65;
+      const low  = Math.max(0.5, Math.min(open, close) - rand() * extra * 0.65);
+      const volume = 800 + rand() * 2600; // 单位：万股
+      days.push({ date: dates[i], open, close, high, low, volume });
+      price = close;
+    }
+    return days;
+  }
+
+  // 每天切成 NUM_SLICES 个价格切片，切片成交量 = 高斯分布(均值=(O+C)/2, 标准差=(H-L)/4) 的密度 * 噪声，归一化后按当天总量缩放
+  function genProfile(day, n){
+    const { open, close, high, low, volume } = day;
+    const step = (high - low) / n;
+    const mean = (open + close) / 2;
+    let std = (high - low) / 4;
+    if(std < 1e-6) std = 0.02;
+
+    const slices = [];
+    let weightSum = 0;
+    for(let i=0;i<n;i++){
+      const pLow = low + i * step;
+      const pHigh = low + (i+1) * step;
+      const mid = (pLow + pHigh) / 2;
+      const z = (mid - mean) / std;
+      let w = Math.exp(-0.5 * z * z);
+      w *= (0.82 + rand() * 0.36); // 模拟真实市场的不规则噪声
+      weightSum += w;
+      slices.push({ pLow, pHigh, mid, w });
+    }
+    let maxVol = 0;
+    for(let i=0;i<n;i++){
+      slices[i].volume = slices[i].w / weightSum * volume;
+      if(slices[i].volume > maxVol) maxVol = slices[i].volume;
+    }
+    return { slices, maxVol };
+  }
+
+  const DAYS = genDays();
+  const PROFILES = DAYS.map(d => genProfile(d, NUM_SLICES));
+
+  const GLOBAL_MAX_PRICE = Math.max(...DAYS.map(d => d.high)) * 1.02;
+  const GLOBAL_MIN_PRICE = Math.min(...DAYS.map(d => d.low)) * 0.98;
+  const MAX_DAY_VOLUME = Math.max(...DAYS.map(d => d.volume));
+
+  // ---------- 2. 工具函数 ----------
+  function setupHiDPI(canvas, cssW, cssH){
+    const dpr = window.devicePixelRatio || 1;
+    canvas.style.width = cssW + 'px';
+    canvas.style.height = cssH + 'px';
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return ctx;
+  }
+
+  function fmtDate(d){
+    return (d.getMonth()+1).toString().padStart(2,'0') + '/' + d.getDate().toString().padStart(2,'0');
+  }
+
+  const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const COLOR = {
+    up: cssVar('--up'), upDim: cssVar('--up-dim'),
+    down: cssVar('--down'), downDim: cssVar('--down-dim'),
+    stick: cssVar('--stick'), grid: cssVar('--grid'), gridSoft: cssVar('--grid-soft'),
+    textDim: cssVar('--text-dim'), textFaint: cssVar('--text-faint'), accent: cssVar('--accent')
+  };
+
+  // ---------- 3. 主图：糖葫芦K线 ----------
+  const mainCanvas = document.getElementById('mainChart');
+  const chartHost = document.getElementById('chartHost');
+  const tooltip = document.getElementById('tooltip');
+
+  const M = { left: 58, right: 16, top: 22, bottom: 34 };
+  let layout = null; // 记录当前布局，供 tooltip 复用
+
+  function drawMain(){
+    const cssW = chartHost.clientWidth;
+    const cssH = 480;
+    const ctx = setupHiDPI(mainCanvas, cssW, cssH);
+    ctx.clearRect(0,0,cssW,cssH);
+
+    const plotW = cssW - M.left - M.right;
+    const plotH = cssH - M.top - M.bottom;
+
+    const yScale = (p) => M.top + (GLOBAL_MAX_PRICE - p) / (GLOBAL_MAX_PRICE - GLOBAL_MIN_PRICE) * plotH;
+    const slotW = plotW / NUM_DAYS;
+    const maxWidthOverall = slotW * 0.82;
+    const cx = (i) => M.left + slotW * (i + 0.5);
+
+    layout = { cssW, cssH, plotW, plotH, yScale, slotW, maxWidthOverall, cx };
+
+    // --- 网格 + 价格轴 ---
+    ctx.strokeStyle = COLOR.gridSoft;
+    ctx.fillStyle = COLOR.textDim;
+    ctx.font = '11px "IBM Plex Mono", monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    const ticks = 6;
+    for(let t=0;t<=ticks;t++){
+      const p = GLOBAL_MIN_PRICE + (GLOBAL_MAX_PRICE - GLOBAL_MIN_PRICE) * t / ticks;
+      const y = yScale(p);
+      ctx.beginPath();
+      ctx.moveTo(M.left, y);
+      ctx.lineTo(cssW - M.right, y);
+      ctx.stroke();
+      ctx.fillText(p.toFixed(2), M.left - 8, y);
+    }
+
+    // --- 逐日绘制 ---
+    ctx.textAlign = 'center';
+    for(let i=0;i<NUM_DAYS;i++){
+      const day = DAYS[i];
+      const { slices, maxVol } = PROFILES[i];
+      const isUp = day.close >= day.open;
+      const bodyTop = Math.max(day.open, day.close);
+      const bodyBottom = Math.min(day.open, day.close);
+      const colorSolid = isUp ? COLOR.up : COLOR.down;
+      const colorDim = isUp ? COLOR.upDim : COLOR.downDim;
+      const center = cx(i);
+      const widthScaleForDay = 0.32 + 0.68 * (day.volume / MAX_DAY_VOLUME);
+      const maxWidthForDay = maxWidthOverall * widthScaleForDay;
+
+      // 竹签（装饰）
+      const yHigh = yScale(day.high);
+      const yLow = yScale(day.low);
+      ctx.strokeStyle = COLOR.stick;
+      ctx.lineWidth = 1.4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(center, yHigh - 9);
+      ctx.lineTo(center, yLow + 9);
+      ctx.stroke();
+      ctx.fillStyle = COLOR.stick;
+      ctx.beginPath();
+      ctx.arc(center, yHigh - 9, 1.6, 0, Math.PI*2);
+      ctx.fill();
+
+      // 逐切片绘制（宽度 ∝ 成交量）
+      const leftPts = [];
+      const rightPts = [];
+      for(let s=0; s<slices.length; s++){
+        const sl = slices[s];
+        const w = Math.max(1.1, maxWidthForDay * (sl.volume / maxVol));
+        const yTop = yScale(sl.pHigh);
+        const yBot = yScale(sl.pLow);
+        const inBody = sl.mid <= bodyTop && sl.mid >= bodyBottom;
+        ctx.fillStyle = inBody ? colorSolid : colorDim;
+        ctx.fillRect(center - w/2, yTop, w, (yBot - yTop) + 0.6);
+        leftPts.push([center - w/2, (yTop+yBot)/2]);
+        rightPts.push([center + w/2, (yTop+yBot)/2]);
+      }
+      // 轮廓线，盖住切片间的接缝，让形状看起来是连续的“糖葫芦”
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      leftPts.forEach((pt, idx) => idx===0 ? ctx.moveTo(pt[0], pt[1]) : ctx.lineTo(pt[0], pt[1]));
+      for(let k=rightPts.length-1;k>=0;k--) ctx.lineTo(rightPts[k][0], rightPts[k][1]);
+      ctx.closePath();
+      ctx.stroke();
+
+      // X 轴日期标签（稀疏显示）
+      if(i % 3 === 0 || i === NUM_DAYS-1){
+        ctx.fillStyle = COLOR.textFaint;
+        ctx.font = '10.5px "IBM Plex Mono", monospace';
+        ctx.fillText(fmtDate(day.date), center, cssH - M.bottom + 16);
+      }
+    }
+  }
+
+  // --- 鼠标交互：十字线 + tooltip ---
+  chartHost.addEventListener('mousemove', (e) => {
+    if(!layout) return;
+    const rect = mainCanvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    if(mx < M.left || mx > layout.cssW - M.right){ tooltip.classList.add('hidden'); return; }
+    let idx = Math.floor((mx - M.left) / layout.slotW);
+    idx = Math.max(0, Math.min(NUM_DAYS-1, idx));
+
+    drawMain(); // 重绘底图
+    const ctx = mainCanvas.getContext('2d');
+    const cx = layout.cx(idx);
+    ctx.save();
+    ctx.strokeStyle = COLOR.accent;
+    ctx.globalAlpha = 0.55;
+    ctx.setLineDash([3,3]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx, M.top);
+    ctx.lineTo(cx, layout.cssH - M.bottom);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(M.left, my);
+    ctx.lineTo(layout.cssW - M.right, my);
+    ctx.stroke();
+    ctx.restore();
+
+    const day = DAYS[idx];
+    const chg = ((day.close - day.open) / day.open * 100);
+    const isUp = chg >= 0;
+    tooltip.innerHTML =
+      '<div class="hd">' + fmtDate(day.date) + '</div>' +
+      '<div class="row"><span class="k">开盘</span><span>' + day.open.toFixed(2) + '</span></div>' +
+      '<div class="row"><span class="k">最高</span><span>' + day.high.toFixed(2) + '</span></div>' +
+      '<div class="row"><span class="k">最低</span><span>' + day.low.toFixed(2) + '</span></div>' +
+      '<div class="row"><span class="k">收盘</span><span class="' + (isUp?'up':'down') + '">' + day.close.toFixed(2) + '</span></div>' +
+      '<div class="row"><span class="k">涨跌幅</span><span class="' + (isUp?'up':'down') + '">' + (isUp?'+':'') + chg.toFixed(2) + '%</span></div>' +
+      '<div class="row"><span class="k">成交量</span><span>' + day.volume.toFixed(0) + ' 万股</span></div>';
+    tooltip.classList.remove('hidden');
+    let tx = cx + 14, ty = my - 10;
+    if(tx + 170 > layout.cssW) tx = cx - 170 - 14;
+    tooltip.style.left = tx + 'px';
+    tooltip.style.top = Math.max(4, ty) + 'px';
+  });
+  chartHost.addEventListener('mouseleave', () => { tooltip.classList.add('hidden'); drawMain(); });
+
+  // ---------- 4. 对比图：传统等宽K线 + 独立成交量柱 ----------
+  const compareCanvas = document.getElementById('compareChart');
+  const compareHost = document.getElementById('compareHost');
+  const comparePanel = document.getElementById('comparePanel');
+  const btnCompare = document.getElementById('btnCompare');
+
+  function drawCompare(){
+    const cssW = compareHost.clientWidth;
+    const cssH = 420;
+    const ctx = setupHiDPI(compareCanvas, cssW, cssH);
+    ctx.clearRect(0,0,cssW,cssH);
+
+    const priceH = cssH * 0.68;
+    const volTop = priceH + 26;
+    const volH = cssH - volTop - 30;
+
+    const plotW = cssW - M.left - M.right;
+    const yScale = (p) => M.top + (GLOBAL_MAX_PRICE - p) / (GLOBAL_MAX_PRICE - GLOBAL_MIN_PRICE) * (priceH - M.top);
+    const slotW = plotW / NUM_DAYS;
+    const cx = (i) => M.left + slotW * (i + 0.5);
+    const candleW = Math.max(2, slotW * 0.55);
+
+    // 价格网格
+    ctx.strokeStyle = COLOR.gridSoft;
+    ctx.fillStyle = COLOR.textDim;
+    ctx.font = '11px "IBM Plex Mono", monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for(let t=0;t<=5;t++){
+      const p = GLOBAL_MIN_PRICE + (GLOBAL_MAX_PRICE - GLOBAL_MIN_PRICE) * t / 5;
+      const y = yScale(p);
+      ctx.beginPath(); ctx.moveTo(M.left,y); ctx.lineTo(cssW-M.right,y); ctx.stroke();
+      ctx.fillText(p.toFixed(2), M.left - 8, y);
+    }
+
+    for(let i=0;i<NUM_DAYS;i++){
+      const day = DAYS[i];
+      const isUp = day.close >= day.open;
+      const color = isUp ? COLOR.up : COLOR.down;
+      const center = cx(i);
+
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(center, yScale(day.high));
+      ctx.lineTo(center, yScale(day.low));
+      ctx.stroke();
+
+      const bTop = yScale(Math.max(day.open, day.close));
+      const bBot = yScale(Math.min(day.open, day.close));
+      ctx.fillStyle = color;
+      ctx.fillRect(center - candleW/2, bTop, candleW, Math.max(1.5, bBot - bTop));
+
+      // 成交量柱（固定宽度，等同传统画法）
+      const volRatio = day.volume / MAX_DAY_VOLUME;
+      const barH = volH * volRatio;
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.85;
+      ctx.fillRect(center - candleW/2, volTop + volH - barH, candleW, barH);
+      ctx.globalAlpha = 1;
+
+      if(i % 3 === 0 || i === NUM_DAYS-1){
+        ctx.fillStyle = COLOR.textFaint;
+        ctx.font = '10.5px "IBM Plex Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(fmtDate(day.date), center, volTop + volH + 16);
+      }
+    }
+    ctx.fillStyle = COLOR.textDim;
+    ctx.textAlign = 'left';
+    ctx.font = '11px "IBM Plex Mono", monospace';
+    ctx.fillText('成交量', M.left, volTop - 8);
+  }
+
+  btnCompare.addEventListener('click', () => {
+    const show = comparePanel.classList.contains('hidden');
+    comparePanel.classList.toggle('hidden');
+    btnCompare.classList.toggle('active', show);
+    if(show) drawCompare();
+  });
+
+  // ---------- 5. 拆解图：放大展示单根糖葫芦K线的构造 ----------
+  const explainCanvas = document.getElementById('explainChart');
+  const explainHost = document.getElementById('explainHost');
+  const explainPanel = document.getElementById('explainPanel');
+  const btnExplain = document.getElementById('btnExplain');
+
+  function drawExplain(){
+    const cssW = explainHost.clientWidth;
+    const cssH = 380;
+    const ctx = setupHiDPI(explainCanvas, cssW, cssH);
+    ctx.clearRect(0,0,cssW,cssH);
+
+    // 挑一根成交量较大的日子放大展示
+    let idx = 0, best = -1;
+    DAYS.forEach((d,i)=>{ if(d.volume > best){ best = d.volume; idx = i; } });
+    const day = DAYS[idx];
+    const { slices, maxVol } = PROFILES[idx];
+    const isUp = day.close >= day.open;
+    const bodyTop = Math.max(day.open, day.close);
+    const bodyBottom = Math.min(day.open, day.close);
+    const colorSolid = isUp ? COLOR.up : COLOR.down;
+    const colorDim = isUp ? COLOR.upDim : COLOR.downDim;
+
+    const top = 26, bottom = cssH - 30;
+    const yScale = (p) => top + (day.high*1.01 - p) / (day.high*1.01 - day.low*0.99) * (bottom - top);
+    const center = cssW * 0.38;
+    const maxWidth = Math.min(cssW * 0.34, 130);
+
+    for(let s=0;s<slices.length;s++){
+      const sl = slices[s];
+      const w = Math.max(1.5, maxWidth * (sl.volume / maxVol));
+      const yTop = yScale(sl.pHigh), yBot = yScale(sl.pLow);
+      const inBody = sl.mid <= bodyTop && sl.mid >= bodyBottom;
+      ctx.fillStyle = inBody ? colorSolid : colorDim;
+      ctx.fillRect(center - w/2, yTop, w, (yBot-yTop)+0.6);
+    }
+    ctx.strokeStyle = COLOR.stick;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(center, yScale(day.high) - 12);
+    ctx.lineTo(center, yScale(day.low) + 12);
+    ctx.stroke();
+
+    // 标注线
+    function label(y, text, color){
+      ctx.strokeStyle = color || COLOR.textFaint;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(center + maxWidth*0.6, y);
+      ctx.lineTo(center + maxWidth*0.9 + 40, y);
+      ctx.stroke();
+      ctx.fillStyle = color || COLOR.textDim;
+      ctx.font = '12px "IBM Plex Mono", monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(text, center + maxWidth*0.9 + 46, y + 4);
+    }
+    label(yScale(day.high), '上影线（淡色）— 最高价到实体顶端', colorDim);
+    label(yScale((bodyTop+bodyBottom)/2), '实体（实色）— 开盘↔收盘，宽处=成交密集', colorSolid);
+    label(yScale(day.low), '下影线（淡色）— 实体底端到最低价', colorDim);
+    label(yScale(day.high) - 20, '竹签装饰，不携带数据', COLOR.stick);
+
+    ctx.fillStyle = COLOR.textDim;
+    ctx.font = '11px "IBM Plex Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(fmtDate(day.date) + '（当期成交量最大的一天，放大展示）', center, bottom + 20);
+  }
+
+  btnExplain.addEventListener('click', () => {
+    const show = explainPanel.classList.contains('hidden');
+    explainPanel.classList.toggle('hidden');
+    btnExplain.classList.toggle('active', show);
+    if(show) drawExplain();
+  });
+
+  // ---------- 6. 初始化与响应式 ----------
+  function redrawAll(){
+    drawMain();
+    if(!comparePanel.classList.contains('hidden')) drawCompare();
+    if(!explainPanel.classList.contains('hidden')) drawExplain();
+  }
+  window.addEventListener('resize', () => {
+    clearTimeout(window.__rt);
+    window.__rt = setTimeout(redrawAll, 120);
+  });
+
+  redrawAll();
+})();
+</script>
+</body>
+</html>

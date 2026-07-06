@@ -129,6 +129,8 @@ within a single visual object.
 
 ## 为什么叫“糖胡芦图” | Why “Tanghulu Chart”
 
+![tanghulu](image/tanghulu.jpg)
+
 名称来源于中国传统小吃：
 
 糖葫芦。
@@ -142,6 +144,8 @@ within a single visual object.
 * 山峰
 * 火山
 
+糖葫芦大多数情况下是红色的，而红色在中国股市中代表上涨，希望这个颜色带来美好的寓意。
+
 “胡”字取自作者姓氏，因此命名为：
 
 糖胡芦图（Tanghulu Chart）
@@ -154,6 +158,8 @@ In many markets, trading activity clusters around certain price regions, produci
 * Hourglasses
 * Mountains
 * Volcanoes
+
+Tanghulu are mostly red. In China's stock market, red represents an upward trend, and I hope this color brings auspicious implications.
 
 The Chinese character “Hu” (胡) also references the creator's surname.
 
@@ -235,12 +241,7 @@ It helps identify where most trading activity is concentrated.
 
 目前仍处于实验阶段。
 
-欢迎：
-
-* 提出改进建议
-* 提交 Issue
-* 提交 Pull Request
-* 提供真实交易数据进行验证
+欢迎提出改进建议，或者在你的工具采用这个设计理念。
 
 This project is not intended to replace all existing financial charts.
 
@@ -248,7 +249,49 @@ Instead, it explores a new visualization language that integrates price and volu
 
 The project is currently experimental.
 
-Contributions, discussions, and real-world testing are highly encouraged.
+Feel free to share suggestions for improvement, or adopt this design concept in your tools.
+
+---
+
+## AI制作的示例 | Examples created by AI
+
+#### GLM5.2
+
+![GLM5.2-v0.9-K](image/GLM5.2-v0.9-K.png)
+
+![GLM5.2-v0.9-tanghulu](image/GLM5.2-v0.9-tanghulu.png)
+
+![GLM5.2-v1.0-tanghulu](image/GLM5.2-v1.0-tanghulu.png)
+
+![GLM5.2-v2.0](image/GLM5.2-v2.0.png)
+
+#### Claude
+
+![claude-v1.0-K](image/claude-v1.0-K.png)
+
+![claude-v1.0-tanghulu](image/claude-v1.0-tanghulu.png)
+
+![claude-v1.1-tanghulu](image/claude-v1.1-tanghulu.png)
+
+![claude-v1.2-K](image/claude-v1.2-K.png)
+
+![claude-v1.2-tanghulu](image/claude-v1.2-tanghulu.png)
+
+![claude-v2.0-tanghulu](image/claude-v2.0-tanghulu.png)
+
+#### Gemini
+
+![gemini-v1.0](image/gemini-v1.0.png)
+
+![gemini-v2.0](image/gemini-v2.0.png)
+
+![gemini-v2.1](image/gemini-v2.1.png)
+
+![gemini-v2.2](image/gemini-v2.2.png)
+
+![gemini-v2.3](image/gemini-v2.3.png)
+
+![gemini-v2.4](image/gemini-v2.4.png)
 
 ---
 

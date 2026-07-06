@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tanghulu Chart | 糖胡芦图</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; }
+        .canvas-container { position: relative; width: 100%; height: 500px; border: 1px solid #30363d; border-radius: 8px; background-color: #161b22; overflow: hidden; }
+        canvas { display: block; cursor: crosshair; }
+        
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0d1117; }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #484f58; }
+        
+        .toolbar-btn { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+        .toolbar-btn:hover { background: #30363d; border-color: #8b949e; }
+        
+        .dist-btn { padding: 4px 10px; border-radius: 4px; font-size: 12px; color: #8b949e; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; }
+        .dist-btn:hover { color: #c9d1d9; background: #21262d; }
+        .dist-btn.active { background: #3b82f6; color: #ffffff; border-color: #3b82f6; }
+        
+        .toolbar-checkbox { accent-color: #3b82f6; width: 14px; height: 14px; cursor: pointer; }
+        input[type=range] { accent-color: #3b82f6; }
+        
+        .doc-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; height: 100%; }
+        .en { color: #8b949e; font-size: 0.85em; display: block; margin-top: 4px; line-height: 1.5; font-family: 'Segoe UI', sans-serif; }
+        .en-inline { color: #8b949e; font-size: 0.9em; font-family: 'Segoe UI', sans-serif; }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen p-4 md:p-6">
+
+    <!-- Header -->
+    <header class="mb-4">
+        <h1 class="text-2xl font-bold text-white flex items-center gap-3">
+            <span>🍡</span> 糖胡芦图 <span class="text-gray-500 font-normal text-xl">Tanghulu Chart</span>
+        </h1>
+        <p class="text-gray-400 mt-1 text-sm max-w-5xl">
+            高信息密度金融可视化：结合买卖失衡(Delta)、智能分布模式、动态剖面明细与收盘趋势。
+            <span class="en mt-1">High-density financial visualization: Combining Delta, smart distribution modes, dynamic profiles, and close trend lines.</span>
+        </p>
+    </header>
+
+    <!-- Toolbar -->
+    <div class="flex flex-col md:flex-row flex-wrap items-center gap-4 bg-[#161b22] border border-[#30363d] rounded-lg p-3 mb-6">
+        <div class="flex items-center gap-2 bg-[#0d1117] p-1 rounded-md border border-[#30363d]">
+            <button class="dist-btn active" data-mode="auto">智能混合 <span class="text-[10px] ml-1 opacity-70">Auto</span></button>
+            <button class="dist-btn" data-mode="normal">正态 <span class="text-[10px] ml-1 opacity-70">Normal</span></button>
+            <button class="dist-btn" data-mode="bimodal">双峰 <span class="text-[10px] ml-1 opacity-70">Bimodal</span></button>
+            <button class="dist-btn" data-mode="skewed">偏态 <span class="text-[10px] ml-1 opacity-70">Skewed</span></button>
+        </div>
+        
+        <div class="h-6 w-px bg-[#30363d] hidden md:block"></div>
+        
+        <div class="flex flex-wrap items-center gap-4">
+            <label class="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer select-none">
+                <input type="checkbox" id="tg-delta" class="toolbar-checkbox" checked>
+                买卖分离 <span class="en-inline text-[10px]">Delta</span>
+            </label>
+            <label class="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer select-none">
+                <input type="checkbox" id="tg-va" class="toolbar-checkbox" checked>
+                价值区域 <span class="en-inline text-[10px]">VA</span>
+            </label>
+            <label class="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer select-none">
+                <input type="checkbox" id="tg-poc" class="toolbar-checkbox" checked>
+                最大成交 <span class="en-inline text-[10px]">POC</span>
+            </label>
+            <label class="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer select-none">
+                <input type="checkbox" id="tg-trend" class="toolbar-checkbox" checked>
+                收盘趋势 <span class="en-inline text-[10px]">Trend</span>
+            </label>
+        </div>
+
+        <div class="ml-auto">
+            <button id="btn-regen" class="toolbar-btn flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21v-5h5"/></svg>
+                重新生成 <span class="en-inline text-xs ml-1">Regen</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Layout -->
+    <main class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+        
+        <!-- Left Column: Main Chart & Sliders (Span 3) -->
+        <div class="lg:col-span-3 flex flex-col gap-4">
+            
+            <!-- Chart Area -->
+            <div class="canvas-container" id="chart-container">
+                <canvas id="tanghulu-canvas"></canvas>
+            </div>
+
+            <!-- Dynamic Tweaks Sliders -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 bg-[#161b22] border border-[#30363d] rounded-lg p-5">
+                <!-- Slider Bins -->
+                <div class="flex flex-col gap-2">
+                    <div class="flex justify-between text-xs font-semibold">
+                        <span class="text-gray-400">价格切片数 (N) <span class="font-normal text-[10px] ml-1">Resolution</span></span>
+                        <span id="val-bins" class="text-blue-400 font-mono">50</span>
+                    </div>
+                    <input id="slider-bins" type="range" min="20" max="100" value="50" class="w-full h-1.5 bg-gray-800 rounded-lg appearance-none cursor-pointer">
+                </div>
+                <!-- Slider Width -->
+                <div class="flex flex-col gap-2">
+                    <div class="flex justify-between text-xs font-semibold">
+                        <span class="text-gray-400">单根最大宽度 <span class="font-normal text-[10px] ml-1">Max Width</span></span>
+                        <span id="val-width" class="text-blue-400 font-mono">32px</span>
+                    </div>
+                    <input id="slider-width" type="range" min="16" max="64" value="32" class="w-full h-1.5 bg-gray-800 rounded-lg appearance-none cursor-pointer">
+                </div>
+                <!-- Slider Volatility -->
+                <div class="flex flex-col gap-2">
+                    <div class="flex justify-between text-xs font-semibold">
+                        <span class="text-gray-400">模拟波幅 <span class="font-normal text-[10px] ml-1">Volatility</span></span>
+                        <span id="val-vol" class="text-blue-400 font-mono">2.5%</span>
+                    </div>
+                    <input id="slider-vol" type="range" min="1" max="6" step="0.5" value="2.5" class="w-full h-1.5 bg-gray-800 rounded-lg appearance-none cursor-pointer">
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Column: Interactive Profile Details (Span 1) -->
+        <div class="lg:col-span-1 flex flex-col h-full">
+            <div class="bg-[#161b22] border border-[#30363d] rounded-lg p-5 flex-1 flex flex-col h-full">
+                <h3 class="text-sm font-bold text-gray-300 mb-4 flex items-center gap-2 uppercase tracking-wide">
+                    <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span> 交互式剖面明细
+                </h3>
+                
+                <div class="bg-[#0d1117] rounded-lg p-4 border border-[#30363d] mb-5">
+                    <div class="flex justify-between items-center mb-3">
+                        <span id="det-date" class="font-mono text-sm font-bold text-blue-400">YYYY-MM-DD</span>
+                        <span id="det-mode" class="text-[10px] px-2 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-600">Smart Mix</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs font-mono">
+                        <div class="flex justify-between border-b border-[#161b22] pb-1"><span class="text-gray-500">Open</span><span id="det-o" class="text-gray-300">0.00</span></div>
+                        <div class="flex justify-between border-b border-[#161b22] pb-1"><span class="text-gray-500">Close</span><span id="det-c" class="text-gray-300">0.00</span></div>
+                        <div class="flex justify-between border-b border-[#161b22] pb-1"><span class="text-gray-500">High</span><span id="det-h" class="text-gray-300">0.00</span></div>
+                        <div class="flex justify-between border-b border-[#161b22] pb-1"><span class="text-gray-500">Low</span><span id="det-l" class="text-gray-300">0.00</span></div>
+                        <div class="col-span-2 flex justify-between pt-1">
+                            <span class="text-gray-500">Total Vol</span><span id="det-v" class="text-blue-400 font-bold">0</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="text-[10px] text-gray-500 mb-2">微观高精筹码剖面图 (Volume Profile)</div>
+                <div class="flex-1 w-full relative min-h-[250px] bg-[#0d1117] rounded-lg border border-[#30363d] p-2 overflow-hidden">
+                    <canvas id="profile-canvas" class="w-full h-full block"></canvas>
+                </div>
+                <div class="text-[10px] text-gray-600 mt-3 leading-relaxed">
+                    * 鼠标在主图悬停即可动态查看每日剖面。图表展示了选中日价格在 [Low, High] 区间的高精分布。
+                </div>
+            </div>
+        </div>
+        
+    </main>
+
+    <!-- Legend -->
+    <div class="flex flex-wrap items-center gap-x-6 gap-y-3 bg-[#161b22] border border-[#30363d] rounded-lg p-4 mb-8">
+        <div class="text-sm font-bold text-gray-300 w-full mb-1">图例 Legend</div>
+        
+        <div class="flex items-center gap-2 text-sm text-gray-400">
+            <div class="w-3 h-3 rounded-sm bg-[#00ffcc]"></div>
+            <span>主买 <span class="en-inline text-xs">Ask Vol</span></span>
+        </div>
+        <div class="flex items-center gap-2 text-sm text-gray-400">
+            <div class="w-3 h-3 rounded-sm bg-[#ff0055]"></div>
+            <span>主卖 <span class="en-inline text-xs">Bid Vol</span></span>
+        </div>
+        <div class="flex items-center gap-2 text-sm text-gray-400">
+            <div class="w-4 h-0.5 bg-[#ffd700]"></div>
+            <span>POC <span class="en-inline text-xs">Max Vol Price</span></span>
+        </div>
+        <div class="flex items-center gap-2 text-sm text-gray-400">
+            <div class="w-4 h-3 bg-[#21262d] border border-gray-500 rounded-sm"></div>
+            <span>Value Area <span class="en-inline text-xs">70% Zone</span></span>
+        </div>
+        
+        <div class="w-px h-4 bg-[#30363d] mx-2"></div>
+        
+        <div class="flex items-center gap-2 text-sm text-gray-400">
+            <div class="w-2.5 h-2.5 rounded-full border-[1.5px] border-white flex items-center justify-center"></div>
+            <span>开盘 (左空心) <span class="en-inline text-xs">Open (L Hollow)</span></span>
+        </div>
+        <div class="flex items-center gap-2 text-sm text-gray-400">
+            <div class="w-2.5 h-2.5 rounded-full bg-white"></div>
+            <span>收盘 (右实心) <span class="en-inline text-xs">Close (R Solid)</span></span>
+        </div>
+        <div class="flex items-center gap-2 text-sm text-gray-400">
+            <div class="w-4 h-px border-t border-dashed border-gray-400"></div>
+            <span>收盘趋势线 <span class="en-inline text-xs">Close Trend</span></span>
+        </div>
+    </div>
+
+    <!-- Documentation -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+        <!-- Card 1 -->
+        <div class="doc-card">
+            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <span class="w-6 h-6 rounded-full bg-blue-500 text-black flex items-center justify-center text-sm">1</span>
+                图表设计理念 <span class="en-inline ml-2 text-base">Design Concept</span>
+            </h3>
+            <div class="text-sm text-gray-300 space-y-4">
+                <p>
+                    <strong class="text-white">核心隐喻</strong>：一根竹签串着若干糖果——这正是中国街头小吃"糖葫芦"的形态。
+                    <span class="en">Core metaphor: a bamboo skewer threading several candies — exactly the shape of the Chinese street snack "tanghulu".</span>
+                </p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li>
+                        <strong class="text-white">竹签 (Skewer)</strong>：代表当日 <b>Low → High</b> 的价格区间。<br>
+                        <span class="en">Represents the day's Low → High price range.</span>
+                    </li>
+                    <li>
+                        <strong class="text-white">糖果 (Candies)</strong>：每个价格层的成交量。糖果的宽度与该层成交量成正比，越宽代表该价格成交越密集。<br>
+                        <span class="en">Volume at each price level. Width is proportional to volume — wider means heavier trading.</span>
+                    </li>
+                    <li>
+                        <strong class="text-white">买卖失衡 (Delta Split)</strong>：左右不对称设计。左侧(青色)代表主买成交量(Ask Vol)，右侧(红色)代表主卖成交量(Bid Vol)。哪边更鼓，说明该价位哪方力量更激进。<br>
+                        <span class="en">Asymmetrical design. Left (Cyan) = Ask Vol (Buy), Right (Red) = Bid Vol (Sell). A bulge on one side indicates which side was more aggressive at that price.</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Card 2 -->
+        <div class="doc-card">
+            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <span class="w-6 h-6 rounded-full bg-blue-500 text-black flex items-center justify-center text-sm">2</span>
+                如何解读糖胡芦图 <span class="en-inline ml-2 text-base">How to Read</span>
+            </h3>
+            <div class="text-sm text-gray-300 space-y-3">
+                <ul class="list-disc pl-5 space-y-3">
+                    <li>
+                        <strong class="text-white">看糖果分布</strong>：糖果集中在哪段价格，就是当日的<b>成交重心</b>。越聚拢说明市场共识越强。<br>
+                        <span class="en">Berry distribution: where candies cluster is the day's trading center of gravity.</span>
+                    </li>
+                    <li>
+                        <strong class="text-white">看最宽处 (POC)</strong>：金色横线标记的位置，是当日<b>成交量最大的价格 (Point of Control)</b>。<br>
+                        <span class="en">Widest point (POC): the gold line marks the price with the most volume.</span>
+                    </li>
+                    <li>
+                        <strong class="text-white">看高亮区 (Value Area)</strong>：颜色更实、覆盖约 70% 成交量的价格区间，是当日<b>价值区域</b>。<br>
+                        <span class="en">Highlighted zone (Value Area): the heavy-fill area covering ~70% of volume.</span>
+                    </li>
+                    <li>
+                        <strong class="text-white">看左右不对称</strong>：如果某价位左侧青色明显宽于右侧红色，说明买方在此处极其激进（主动吃筹码）。<br>
+                        <span class="en">Asymmetry: if left (cyan) is much wider than right (red) at a price, buyers were highly aggressive there.</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Card 3 -->
+        <div class="doc-card">
+            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <span class="w-6 h-6 rounded-full bg-blue-500 text-black flex items-center justify-center text-sm">3</span>
+                极致优化的开收盘 <span class="en-inline ml-2 text-base">Optimized Open/Close</span>
+            </h3>
+            <div class="text-sm text-gray-300 space-y-3">
+                <p>
+                    为解决传统糖胡芦图难以一眼辨识开收盘的问题，本版本采用了极致的符号化设计：<br>
+                    <span class="en">To solve the issue of identifying open/close prices in previous versions, we adopted an extreme symbolic design:</span>
+                </p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li>
+                        <strong class="text-white">左侧空心圆结 (Left Hollow Knot)</strong>：代表开盘价 (Open)。<br>
+                        <span class="en">Represents the Open price.</span>
+                    </li>
+                    <li>
+                        <strong class="text-white">右侧实心圆结 (Right Solid Knot)</strong>：代表收盘价 (Close)。<br>
+                        <span class="en">Represents the Close price.</span>
+                    </li>
+                    <li>
+                        <strong class="text-white">虚线收盘趋势线 (Close Trend Line)</strong>：将所有交易日的收盘价串联，瞬间把握市场整体趋势。<br>
+                        <span class="en">Connects all close prices to instantly grasp the overall market trend without relying on colors.</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Card 4 -->
+        <div class="doc-card">
+            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <span class="w-6 h-6 rounded-full bg-blue-500 text-black flex items-center justify-center text-sm">4</span>
+                智能分布模式 <span class="en-inline ml-2 text-base">Smart Distribution Modes</span>
+            </h3>
+            <div class="text-sm text-gray-300 space-y-3">
+                <p>
+                    提供四种微观筹码模拟生成模式，可在顶部工具栏切换：<br>
+                    <span class="en">Offers four simulated micro-volume generation modes, switchable via the top toolbar:</span>
+                </p>
+                <ul class="list-disc pl-5 space-y-3">
+                    <li>
+                        <strong class="text-blue-400">智能混合 (Smart Mix)</strong>：根据日内涨跌幅自动选择分布类型。<br>
+                        <span class="en">Automatically selects distribution type based on intraday volatility.</span>
+                    </li>
+                    <li>
+                        <strong class="text-white">正态分布 (Normal)</strong>：经典钟形曲线，筹码集中在均价。<br>
+                        <span class="en">Classic bell curve, volume concentrated at the average price.</span>
+                    </li>
+                    <li>
+                        <strong class="text-white">双峰分布 (Bimodal)</strong>：开盘和收盘处各有一个筹码峰，说明日内两端争夺激烈。<br>
+                        <span class="en">Volume peaks at both open and close, indicating fierce battles at the extremes.</span>
+                    </li>
+                    <li>
+                        <strong class="text-white">偏态分布 (Skewed)</strong>：筹码极度偏向收盘价，暗示单边趋势强劲。<br>
+                        <span class="en">Volume heavily skewed towards the close, implying a strong one-sided trend.</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+<script>
+/**
+ * Tanghulu Chart Core Engine (Ultimate Edition)
+ */
+const NUM_DAYS = 40;
+let chartData = [];
+let hoverIndex = -1;
+
+// Global CFG bound to UI
+const CFG = {
+    splitDelta: true,
+    showVA: true,
+    showPOC: true,
+    showTrend: true,
+    distMode: 'auto',
+    bins: 50,
+    maxWidth: 32,
+    volatility: 0.025
+};
+
+// Colors Palette
+const COLORS = {
+    buy: { main: '#00ffcc', fill: 'rgba(0, 255, 204, 0.75)', light: 'rgba(0, 255, 204, 0.15)', line: '#00ccaa' },
+    sell: { main: '#ff0055', fill: 'rgba(255, 0, 85, 0.75)', light: 'rgba(255, 0, 85, 0.15)', line: '#cc0044' },
+    sym: { main: '#3b82f6', fill: 'rgba(59, 130, 246, 0.75)', light: 'rgba(59, 130, 246, 0.15)', line: '#2563eb' },
+    poc: '#ffd700',
+    bg: '#0d1117'
+};
+
+// 1. Data Generation
+function generateData() {
+    let data = [];
+    let currentPrice = 3000;
+    let baseDate = new Date();
+    baseDate.setDate(baseDate.getDate() - NUM_DAYS);
+
+    for (let i = 0; i < NUM_DAYS; i++) {
+        let date = new Date(baseDate);
+        date.setDate(date.getDate() + i);
+
+        // OHLC
+        let gap = (Math.random() - 0.5) * currentPrice * 0.008;
+        let open = currentPrice + gap;
+        let change = (Math.random() - 0.5) * CFG.volatility * 2;
+        let close = open * (1 + change);
+        
+        let maxShadow = CFG.volatility * (0.3 + Math.random() * 0.7);
+        let high = Math.max(open, close) * (1 + maxShadow);
+        let low = Math.min(open, close) * (1 - maxShadow);
+        
+        currentPrice = close;
+        let isUp = close >= open;
+
+        // Determine Mode
+        let dayMode = CFG.distMode;
+        if (dayMode === 'auto') {
+            let chgPct = Math.abs(close - open) / open;
+            if (chgPct > CFG.volatility * 0.8) dayMode = 'skewed';
+            else if (chgPct < CFG.volatility * 0.2) dayMode = 'bimodal';
+            else dayMode = 'normal';
+        }
+
+        let peaks = [];
+        let range = high - low;
+        if (dayMode === 'normal') {
+            peaks.push({ price: (open + close)/2, width: range * 0.2, weight: 100 });
+        } else if (dayMode === 'bimodal') {
+            peaks.push({ price: open, width: range * 0.15, weight: 80 });
+            peaks.push({ price: close, width: range * 0.15, weight: 80 });
+        } else if (dayMode === 'skewed') {
+            peaks.push({ price: close, width: range * 0.1, weight: 120 });
+            peaks.push({ price: (high + low)/2, width: range * 0.3, weight: 40 });
+        }
+
+        let binSize = (high - low) / CFG.bins;
+        let askProfile = new Array(CFG.bins).fill(0);
+        let bidProfile = new Array(CFG.bins).fill(0);
+        let totalProfile = new Array(CFG.bins).fill(0);
+        let totalVol = 0;
+        let maxSideVol = 0;
+        let totalBuyVol = 0, totalSellVol = 0;
+
+        for (let b = 0; b < CFG.bins; b++) {
+            let p = low + (b * binSize) + (binSize / 2);
+            let vol = 5 + Math.random() * 5; 
+            
+            peaks.forEach(peak => {
+                let dist = Math.abs(p - peak.price);
+                vol += peak.weight * Math.exp(-(dist * dist) / (2 * peak.width * peak.width));
+            });
+
+            // Delta
+            let baseRatio = isUp ? 0.6 : 0.4;
+            let binRatio = baseRatio + (Math.random() * 0.4 - 0.2); 
+            binRatio = Math.max(0.1, Math.min(0.9, binRatio));
+
+            let askVol = vol * binRatio;
+            let bidVol = vol * (1 - binRatio);
+
+            askProfile[b] = askVol;
+            bidProfile[b] = bidVol;
+            totalProfile[b] = vol;
+            
+            totalVol += vol;
+            totalBuyVol += askVol;
+            totalSellVol += bidVol;
+
+            if (askVol > maxSideVol) maxSideVol = askVol;
+            if (bidVol > maxSideVol) maxSideVol = bidVol;
+        }
+
+        // POC
+        let maxVol = 0;
+        let pocIndex = 0;
+        for (let b = 0; b < CFG.bins; b++) {
+            if (totalProfile[b] > maxVol) {
+                maxVol = totalProfile[b];
+                pocIndex = b;
+            }
+        }
+        let poc = low + (pocIndex * binSize) + (binSize / 2);
+
+        // Value Area (70%)
+        let targetVol = totalVol * 0.70;
+        let currentVol = totalProfile[pocIndex];
+        let upIndex = pocIndex + 1;
+        let downIndex = pocIndex - 1;
+        
+        while (currentVol < targetVol && (upIndex < CFG.bins || downIndex >= 0)) {
+            let upVol = upIndex < CFG.bins ? totalProfile[upIndex] : -1;
+            let downVol = downIndex >= 0 ? totalProfile[downIndex] : -1;
+
+            if (upVol > downVol) {
+                currentVol += upVol;
+                upIndex++;
+            } else {
+                currentVol += downVol;
+                downIndex--;
+            }
+        }
+        
+        let vaLowIndex = Math.max(0, downIndex + 1);
+        let vaHighIndex = Math.min(CFG.bins - 1, upIndex - 1);
+        let vaLow = low + (vaLowIndex * binSize);
+        let vaHigh = low + (vaHighIndex * binSize);
+
+        data.push({
+            date: date.toISOString().split('T')[0],
+            open, high, low, close,
+            askProfile, bidProfile, totalProfile, bins: CFG.bins, binSize, 
+            maxSideVol, totalVol, totalBuyVol, totalSellVol, delta: totalBuyVol - totalSellVol,
+            poc, vaLow, vaHigh, vaLowIndex, vaHighIndex,
+            isUp, dayMode
+        });
+    }
+    return data;
+}
+
+// 2. Rendering Engine - Main Chart
+const canvas = document.getElementById('tanghulu-canvas');
+const ctx = canvas.getContext('2d', { alpha: false });
+const container = document.getElementById('chart-container');
+
+let width, height;
+let minPrice = Infinity, maxPrice = -Infinity;
+const PADDING = { top: 30, bottom: 40, left: 20, right: 60 };
+
+function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = container.getBoundingClientRect();
+    width = rect.width;
+    height = rect.height;
+    
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    ctx.scale(dpr, dpr);
+    
+    drawMain();
+}
+
+function mapY(price) {
+    return PADDING.top + (height - PADDING.top - PADDING.bottom) * (1 - (price - minPrice) / (maxPrice - minPrice));
+}
+
+function mapX(index) {
+    const drawableWidth = width - PADDING.left - PADDING.right;
+    const step = drawableWidth / (NUM_DAYS + 1);
+    return PADDING.left + step * (index + 1);
+}
+
+function drawMain() {
+    if(!chartData.length) return;
+
+    minPrice = Math.min(...chartData.map(d => d.low));
+    maxPrice = Math.max(...chartData.map(d => d.high));
+    const range = maxPrice - minPrice;
+    minPrice -= range * 0.05;
+    maxPrice += range * 0.05;
+
+    ctx.fillStyle = COLORS.bg;
+    ctx.fillRect(0, 0, width, height);
+    drawAxes();
+
+    // Draw Close Trend Line
+    if (CFG.showTrend) {
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        chartData.forEach((day, i) => {
+            let x = mapX(i);
+            let yC = mapY(day.close);
+            if (i === 0) ctx.moveTo(x, yC);
+            else ctx.lineTo(x, yC);
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // Draw Tanghulu
+    chartData.forEach((day, i) => {
+        const x = mapX(i);
+        const yHigh = mapY(day.high);
+        const yLow = mapY(day.low);
+        
+        const opacity = (hoverIndex === -1 || hoverIndex === i) ? 1 : 0.3;
+        ctx.globalAlpha = opacity;
+
+        // Skewer
+        ctx.beginPath();
+        ctx.moveTo(x, yHigh);
+        ctx.lineTo(x, yLow);
+        ctx.strokeStyle = '#484f58';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Volume Profile
+        const drawProfileSide = (profileData, side, limitToVA, colorSet, isSym) => {
+            ctx.beginPath();
+            let startBin = limitToVA ? day.vaLowIndex : 0;
+            let endBin = limitToVA ? day.vaHighIndex : day.bins - 1;
+            
+            let startY = mapY(day.low + startBin * day.binSize);
+            ctx.moveTo(x, startY);
+            
+            for (let b = startBin; b <= endBin; b++) {
+                let p = day.low + (b * day.binSize) + (day.binSize / 2);
+                let y = mapY(p);
+                
+                let vol = isSym ? (day.totalProfile[b]/2) : profileData[b];
+                let ratio = Math.sqrt(vol / day.maxSideVol);
+                let w = ratio * (CFG.maxWidth / 2);
+                
+                if (side === 'left') ctx.lineTo(x - w, y);
+                else ctx.lineTo(x + w, y);
+            }
+            
+            let endY = mapY(day.low + endBin * day.binSize + day.binSize);
+            ctx.lineTo(x, endY);
+            ctx.closePath();
+
+            ctx.fillStyle = limitToVA ? colorSet.fill : colorSet.light;
+            ctx.fill();
+            
+            if (!limitToVA) {
+                ctx.strokeStyle = colorSet.main;
+                ctx.lineWidth = 0.5;
+                ctx.stroke();
+            }
+        };
+
+        if (CFG.splitDelta) {
+            drawProfileSide(day.askProfile, 'left', false, COLORS.buy, false);
+            drawProfileSide(day.bidProfile, 'right', false, COLORS.sell, false);
+            if (CFG.showVA) {
+                drawProfileSide(day.askProfile, 'left', true, COLORS.buy, false);
+                drawProfileSide(day.bidProfile, 'right', true, COLORS.sell, false);
+            }
+        } else {
+            drawProfileSide(null, 'left', false, COLORS.sym, true);
+            drawProfileSide(null, 'right', false, COLORS.sym, true);
+            if (CFG.showVA) {
+                drawProfileSide(null, 'left', true, COLORS.sym, true);
+                drawProfileSide(null, 'right', true, COLORS.sym, true);
+            }
+        }
+
+        // Distinct Open / Close Marks
+        let yO = mapY(day.open);
+        let yC = mapY(day.close);
+
+        // Open - Left Hollow Knot
+        ctx.beginPath();
+        ctx.moveTo(x, yO); ctx.lineTo(x - 10, yO);
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(x - 12, yO, 3, 0, Math.PI*2);
+        ctx.fillStyle = '#161b22'; 
+        ctx.fill();
+        ctx.stroke();
+
+        // Close - Right Solid Knot
+        ctx.beginPath();
+        ctx.moveTo(x, yC); ctx.lineTo(x + 10, yC);
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(x + 12, yC, 3, 0, Math.PI*2);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+
+        // POC
+        if (CFG.showPOC) {
+            let yPoc = mapY(day.poc);
+            let pocWidth = (CFG.maxWidth / 2) + 6;
+            ctx.beginPath();
+            ctx.moveTo(x - pocWidth, yPoc);
+            ctx.lineTo(x + pocWidth, yPoc);
+            ctx.strokeStyle = COLORS.poc;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+        
+        ctx.globalAlpha = 1.0;
+    });
+
+    if (hoverIndex !== -1) drawCrosshair();
+}
+
+function drawAxes() {
+    ctx.strokeStyle = '#1f2937'; 
+    ctx.lineWidth = 1;
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+
+    const numYLines = 8;
+    const yStep = (maxPrice - minPrice) / numYLines;
+    for (let i = 0; i <= numYLines; i++) {
+        let price = minPrice + (i * yStep);
+        let y = mapY(price);
+        
+        ctx.beginPath();
+        ctx.moveTo(PADDING.left, y);
+        ctx.lineTo(width - PADDING.right, y);
+        ctx.stroke();
+
+        ctx.fillText(price.toFixed(0), width - PADDING.right + 10, y);
+    }
+}
+
+let hoverPos = {x:0, y:0};
+
+function drawCrosshair() {
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = 'rgba(139, 148, 158, 0.6)';
+    ctx.lineWidth = 1;
+
+    let x = mapX(hoverIndex);
+    let y = hoverPos.y;
+    
+    ctx.beginPath();
+    ctx.moveTo(x, PADDING.top); ctx.lineTo(x, height - PADDING.bottom);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(PADDING.left, y); ctx.lineTo(width - PADDING.right, y);
+    ctx.stroke();
+    
+    ctx.setLineDash([]); 
+
+    const hoverPrice = minPrice + (maxPrice - minPrice) * (1 - (y - PADDING.top) / (height - PADDING.top - PADDING.bottom));
+    if (hoverPrice <= maxPrice && hoverPrice >= minPrice) {
+        ctx.fillStyle = '#f0f6fc';
+        ctx.fillRect(width - PADDING.right + 5, y - 10, 50, 20);
+        ctx.fillStyle = '#0d1117';
+        ctx.fillText(hoverPrice.toFixed(0), width - PADDING.right + 10, y);
+    }
+}
+
+// 3. Right Panel Interactive Profile
+function drawProfileDetail(day) {
+    const pCanvas = document.getElementById('profile-canvas');
+    const pCtx = pCanvas.getContext('2d', { alpha: false });
+    const rect = pCanvas.parentElement.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    
+    pCanvas.width = rect.width * dpr;
+    pCanvas.height = rect.height * dpr;
+    pCtx.scale(dpr, dpr);
+    
+    const w = rect.width;
+    const h = rect.height;
+    
+    pCtx.fillStyle = '#0d1117';
+    pCtx.fillRect(0, 0, w, h);
+
+    if (!day) return;
+
+    const sliceHeight = h / day.bins;
+    const maxVol = day.maxSideVol;
+
+    // Center Line
+    pCtx.beginPath();
+    pCtx.moveTo(w/2, 0); pCtx.lineTo(w/2, h);
+    pCtx.strokeStyle = 'rgba(255,255,255,0.1)';
+    pCtx.stroke();
+
+    if (CFG.splitDelta) {
+        // Ask (Left - Cyan)
+        pCtx.fillStyle = COLORS.buy.fill;
+        pCtx.beginPath();
+        pCtx.moveTo(w/2, h);
+        for(let i=0; i<day.bins; i++) {
+            let y = h - (i * sliceHeight) - sliceHeight/2;
+            let wd = (day.askProfile[i] / maxVol) * (w/2 - 10);
+            pCtx.lineTo(w/2 - wd, y);
+        }
+        pCtx.lineTo(w/2, 0);
+        pCtx.fill();
+
+        // Bid (Right - Red)
+        pCtx.fillStyle = COLORS.sell.fill;
+        pCtx.beginPath();
+        pCtx.moveTo(w/2, h);
+        for(let i=0; i<day.bins; i++) {
+            let y = h - (i * sliceHeight) - sliceHeight/2;
+            let wd = (day.bidProfile[i] / maxVol) * (w/2 - 10);
+            pCtx.lineTo(w/2 + wd, y);
+        }
+        pCtx.lineTo(w/2, 0);
+        pCtx.fill();
+    } else {
+        // Sym (Blue)
+        pCtx.fillStyle = COLORS.sym.fill;
+        pCtx.beginPath();
+        pCtx.moveTo(w/2, h);
+        for(let i=0; i<day.bins; i++) {
+            let y = h - (i * sliceHeight) - sliceHeight/2;
+            let wd = (day.totalProfile[i] / (maxVol*2)) * (w/2 - 10);
+            pCtx.lineTo(w/2 - wd, y);
+        }
+        pCtx.lineTo(w/2, 0);
+        for(let i=day.bins-1; i>=0; i--) {
+            let y = h - (i * sliceHeight) - sliceHeight/2;
+            let wd = (day.totalProfile[i] / (maxVol*2)) * (w/2 - 10);
+            pCtx.lineTo(w/2 + wd, y);
+        }
+        pCtx.fill();
+    }
+
+    // Price Markers
+    const mapPY = (price) => h - ((price - day.low) / (day.high - day.low)) * h;
+    const drawLine = (price, label, color, align) => {
+        let y = mapPY(price);
+        // clamp to avoid cut off
+        if(y < 10) y = 10;
+        if(y > h - 10) y = h - 10;
+
+        pCtx.beginPath(); pCtx.moveTo(0, y); pCtx.lineTo(w, y);
+        pCtx.strokeStyle = color; pCtx.lineWidth = 1; pCtx.setLineDash([2,2]); pCtx.stroke(); pCtx.setLineDash([]);
+        pCtx.fillStyle = color; pCtx.font = '10px monospace';
+        pCtx.textAlign = align;
+        pCtx.fillText(label, align==='left' ? 5 : w-5, y - 4);
+    };
+
+    drawLine(day.high, 'High', '#8b949e', 'left');
+    drawLine(day.low, 'Low', '#8b949e', 'left');
+    drawLine(day.open, 'Open', '#fff', 'right');
+    drawLine(day.close, 'Close', day.isUp ? COLORS.buy.main : COLORS.sell.main, 'right');
+}
+
+function updateDetailPanel(index) {
+    if(index === -1) return;
+    const day = chartData[index];
+    
+    document.getElementById('det-date').innerText = day.date;
+    const modes = { 'auto':'Smart Mix', 'normal':'Normal', 'bimodal':'Bimodal', 'skewed':'Skewed' };
+    document.getElementById('det-mode').innerText = modes[day.dayMode] || day.dayMode;
+    
+    document.getElementById('det-o').innerText = day.open.toFixed(2);
+    document.getElementById('det-c').innerText = day.close.toFixed(2);
+    document.getElementById('det-h').innerText = day.high.toFixed(2);
+    document.getElementById('det-l').innerText = day.low.toFixed(2);
+    
+    const dayColor = day.isUp ? COLORS.buy.main : COLORS.sell.main;
+    document.getElementById('det-c').style.color = dayColor;
+    
+    document.getElementById('det-v').innerText = Math.round(day.totalVol).toLocaleString();
+
+    drawProfileDetail(day);
+}
+
+// 4. Bindings & Init
+function bindEvents() {
+    // Mouse tracking
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        hoverPos.x = e.clientX - rect.left;
+        hoverPos.y = e.clientY - rect.top;
+
+        let closestIndex = -1;
+        let minDistance = Infinity;
+
+        chartData.forEach((day, i) => {
+            const x = mapX(i);
+            const dist = Math.abs(hoverPos.x - x);
+            if (dist < minDistance) {
+                minDistance = dist;
+                closestIndex = i;
+            }
+        });
+
+        const maxSlotWidth = (width - PADDING.left - PADDING.right) / NUM_DAYS;
+
+        if (minDistance < maxSlotWidth * 1.5) {
+            if (hoverIndex !== closestIndex) {
+                hoverIndex = closestIndex;
+                updateDetailPanel(hoverIndex);
+            }
+            drawMain();
+        } else {
+            hoverIndex = -1;
+            drawMain();
+        }
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+        hoverIndex = -1;
+        drawMain();
+    });
+
+    // Regen
+    document.getElementById('btn-regen').addEventListener('click', () => {
+        chartData = generateData();
+        drawMain();
+        updateDetailPanel(hoverIndex !== -1 ? hoverIndex : chartData.length - 1);
+    });
+
+    // Toggles
+    const bindToggle = (id, key) => {
+        document.getElementById(id).addEventListener('change', (e) => {
+            CFG[key] = e.target.checked;
+            drawMain();
+            if(hoverIndex !== -1) drawProfileDetail(chartData[hoverIndex]);
+        });
+    };
+    bindToggle('tg-delta', 'splitDelta');
+    bindToggle('tg-va', 'showVA');
+    bindToggle('tg-poc', 'showPOC');
+    bindToggle('tg-trend', 'showTrend');
+
+    // Dist Modes
+    const distBtns = document.querySelectorAll('.dist-btn');
+    distBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            distBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            CFG.distMode = btn.getAttribute('data-mode');
+            chartData = generateData();
+            drawMain();
+            updateDetailPanel(hoverIndex !== -1 ? hoverIndex : chartData.length - 1);
+        });
+    });
+
+    // Sliders
+    const bindSlider = (id, valId, key, formatter, refreshData=false) => {
+        const slider = document.getElementById(id);
+        const label = document.getElementById(valId);
+        slider.addEventListener('input', (e) => {
+            let val = parseFloat(e.target.value);
+            if(key==='volatility') val /= 100;
+            CFG[key] = val;
+            label.innerText = formatter(e.target.value);
+            
+            if(refreshData) {
+                chartData = generateData();
+                updateDetailPanel(hoverIndex !== -1 ? hoverIndex : chartData.length - 1);
+            }
+            drawMain();
+        });
+    };
+    bindSlider('slider-bins', 'val-bins', 'bins', v => v, true);
+    bindSlider('slider-width', 'val-width', 'maxWidth', v => v + 'px', false);
+    bindSlider('slider-vol', 'val-vol', 'volatility', v => v + '%', true);
+}
+
+function init() {
+    chartData = generateData();
+    bindEvents();
+    resize();
+    window.addEventListener('resize', () => {
+        resize();
+        if(hoverIndex !== -1) drawProfileDetail(chartData[hoverIndex]);
+    });
+    
+    // Default selection
+    hoverIndex = chartData.length - 1;
+    updateDetailPanel(hoverIndex);
+    drawMain();
+}
+
+init();
+
+</script>
+</body>
+</html>

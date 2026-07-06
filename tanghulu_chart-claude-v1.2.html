@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>糖胡芦图 Tanghulu Chart — 一种新的金融可视化语言</title>
+<style>
+  :root{
+    --lacquer:#241712;
+    --panel:#2c1e17;
+    --panel-2:#382619;
+    --paper:#f6ead7;
+    --paper-2:#efe0c6;
+    --ink:#3a2a1f;
+    --ink-soft:#7d6650;
+    --red:#c8283a;
+    --red-soft:#e0788a;
+    --green:#3f7d5c;
+    --green-soft:#8fc0a6;
+    --gold:#dba233;
+    --stick:#a9835a;
+    --cream-text:#f6ead7;
+    --hairline-dark: rgba(246,234,215,0.12);
+    --hairline-paper: rgba(58,42,31,0.16);
+    --font-display: "Songti SC","STSong","Noto Serif SC",Georgia,"Times New Roman",serif;
+    --font-body: "PingFang SC","Microsoft YaHei","Segoe UI",system-ui,-apple-system,sans-serif;
+    --font-mono: "SF Mono","Consolas","Menlo",monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--lacquer);color:var(--cream-text);font-family:var(--font-body);}
+  body{line-height:1.6;}
+  .en{opacity:0.68;font-weight:400;}
+  h1 .en{display:block;font-size:0.34em;letter-spacing:0.12em;text-transform:uppercase;margin-top:0.35em;opacity:0.72;}
+  h2 .en{display:block;font-size:0.42em;letter-spacing:0.08em;text-transform:uppercase;opacity:0.55;margin-top:0.28em;}
+  a{color:var(--gold);}
+
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px;}
+
+  /* ---------- HERO (dark, live demo zone) ---------- */
+  .hero{padding:64px 0 40px;border-bottom:1px solid var(--hairline-dark);}
+  .eyebrow{
+    font-family:var(--font-mono);font-size:12px;letter-spacing:0.14em;text-transform:uppercase;
+    color:var(--gold);margin:0 0 18px;display:flex;align-items:center;gap:10px;
+  }
+  .eyebrow::before{content:"";width:22px;height:1px;background:var(--gold);display:inline-block;}
+  h1{
+    font-family:var(--font-display);font-size:clamp(36px,6vw,64px);font-weight:600;margin:0 0 20px;
+    letter-spacing:0.01em;color:var(--cream-text);
+  }
+  .hero-sub{max-width:640px;font-size:16px;color:rgba(246,234,215,0.78);margin:0 0 36px;}
+  .hero-sub b{color:var(--cream-text);font-weight:600;}
+
+  .chart-card{
+    background:var(--panel);border:1px solid var(--hairline-dark);border-radius:18px;
+    padding:22px 22px 18px;box-shadow:0 24px 60px -30px rgba(0,0,0,0.7);
+  }
+  .chart-toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px;}
+  .segmented{display:inline-flex;background:var(--panel-2);border-radius:10px;padding:3px;border:1px solid var(--hairline-dark);}
+  .segmented button{
+    font-family:var(--font-body);font-size:13px;font-weight:600;padding:7px 14px;border:none;border-radius:8px;
+    background:transparent;color:rgba(246,234,215,0.6);cursor:pointer;transition:all .15s ease;white-space:nowrap;
+  }
+  .segmented button.active{background:var(--gold);color:#241712;}
+  .overlay-toggles{display:flex;flex-wrap:wrap;gap:14px;font-size:12.5px;color:rgba(246,234,215,0.7);}
+  .overlay-toggles label{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;}
+  .overlay-toggles input{accent-color:var(--gold);}
+  .regen-btn{
+    font-family:var(--font-body);font-size:12.5px;font-weight:600;color:var(--cream-text);
+    background:var(--panel-2);border:1px solid var(--hairline-dark);border-radius:8px;padding:7px 12px;cursor:pointer;
+  }
+  .regen-btn:hover{border-color:var(--gold);}
+  .canvas-scroll{overflow-x:auto;}
+  #mainCanvas{display:block;}
+  #tooltip{
+    position:fixed;display:none;pointer-events:none;background:rgba(20,13,9,0.96);border:1px solid var(--gold);
+    border-radius:10px;padding:10px 12px;font-size:12px;color:var(--cream-text);z-index:50;min-width:200px;
+    font-family:var(--font-mono);line-height:1.55;box-shadow:0 12px 30px -10px rgba(0,0,0,0.6);
+  }
+  #tooltip .tt-title{font-family:var(--font-body);font-weight:700;font-size:12.5px;color:var(--gold);margin-bottom:4px;}
+  #tooltip .tt-row{display:flex;justify-content:space-between;gap:16px;}
+  #tooltip .tt-label{opacity:0.6;}
+
+  /* legend */
+  .legend{display:flex;flex-wrap:wrap;gap:22px;margin-top:18px;padding-top:16px;border-top:1px solid var(--hairline-dark);}
+  .legend-item{display:flex;align-items:center;gap:9px;font-size:12.5px;color:rgba(246,234,215,0.78);}
+  .legend-glyph{width:26px;height:26px;flex:none;}
+
+  /* ---------- SECTIONS ---------- */
+  section{padding:56px 0;}
+  .dark-section{border-bottom:1px solid var(--hairline-dark);}
+  .dark-section h2{font-family:var(--font-display);font-size:clamp(24px,3.4vw,32px);margin:0 0 22px;color:var(--cream-text);}
+  .dark-section p{color:rgba(246,234,215,0.78);max-width:760px;}
+
+  .paper-section{background:var(--paper);color:var(--ink);}
+  .paper-section h2{font-family:var(--font-display);font-size:clamp(24px,3.4vw,32px);margin:0 0 8px;color:var(--ink);}
+  .paper-section h2 .en{color:var(--ink-soft);opacity:0.7;}
+  .paper-section h3{font-family:var(--font-body);font-size:15px;font-weight:700;color:var(--ink);margin:26px 0 8px;}
+  .paper-section p{color:var(--ink);opacity:0.86;max-width:820px;}
+  .paper-section .card-note{
+    background:var(--paper-2);border:1px solid var(--hairline-paper);border-radius:12px;padding:16px 18px;margin-top:14px;
+  }
+
+  .bilingual{display:grid;grid-template-columns:1fr;gap:6px 40px;}
+  @media(min-width:860px){.bilingual{grid-template-columns:1fr 1fr;}}
+  .bilingual .zh{opacity:0.72;font-size:0.95em;}
+
+  table.compare{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px;}
+  table.compare th, table.compare td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--hairline-paper);vertical-align:top;}
+  table.compare th{font-family:var(--font-mono);font-size:11.5px;letter-spacing:0.05em;text-transform:uppercase;color:var(--ink-soft);}
+  table.compare td.tick{color:var(--green);font-weight:700;}
+  table.compare td.cross{color:var(--red);font-weight:700;}
+
+  ol.future li, ul.future li{margin-bottom:14px;}
+
+  /* proof of concept demo */
+  .demo-wrap{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start;}
+  .demo-canvas-box{flex:none;}
+  .demo-caption-cols{display:grid;grid-template-columns:1fr;gap:16px;flex:1;min-width:260px;}
+  @media(min-width:640px){.demo-caption-cols{grid-template-columns:1fr 1fr;}}
+  .demo-caption{background:var(--panel-2);border:1px solid var(--hairline-dark);border-radius:12px;padding:14px 16px;font-size:13px;color:rgba(246,234,215,0.82);}
+  .demo-caption b{color:var(--gold);display:block;margin-bottom:6px;font-size:13.5px;}
+
+  footer{padding:36px 0 60px;text-align:center;color:rgba(246,234,215,0.4);font-size:12.5px;}
+
+  code{font-family:var(--font-mono);background:var(--panel-2);padding:1px 6px;border-radius:5px;font-size:0.92em;}
+  .paper-section code{background:var(--paper-2);color:var(--ink);}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">A prototype visualization language · 一种全新的金融可视化语言</p>
+    <h1>糖胡芦图<span class="en">Tanghulu Chart</span></h1>
+    <p class="hero-sub">
+      A candlestick tells you where price <b>traveled</b>. It says nothing about where the market
+      actually <b>traded</b>. The Tanghulu Chart threads a day's volume-at-price distribution onto its
+      high–low range like fruit on a skewer — so the shape of the candy, not just the stick, carries the story.
+      <br><br>
+      <span style="opacity:0.75">
+      传统K线只能表达价格“到过哪里”，却无法表达市场“真正在哪里成交”。糖胡芦图把每日的价格—成交量分布，
+      串在当日最高价到最低价的“签子”上，像糖葫芦一样——让果子的大小，而不只是签子的长短，讲出这一天的故事。
+      </span>
+    </p>
+
+    <div class="chart-card">
+      <div class="chart-toolbar">
+        <div class="segmented" id="modeToggle">
+          <button data-mode="tanghulu" class="active">糖胡芦 Tanghulu</button>
+          <button data-mode="candle">传统K线 Candlestick</button>
+        </div>
+        <div class="overlay-toggles" id="overlayToggles">
+          <label><input type="checkbox" id="ov-va" checked> 价值区带 Value-Area Ribbon</label>
+          <label><input type="checkbox" id="ov-poc" checked> POC连线 POC Trail</label>
+          <label><input type="checkbox" id="ov-close"> 收盘连线 Close Line</label>
+        </div>
+        <button class="regen-btn" id="regenBtn">🔄 重新模拟数据 Regenerate Data</button>
+      </div>
+      <div class="canvas-scroll">
+        <canvas id="mainCanvas"></canvas>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+  </header>
+
+  <section class="dark-section">
+    <h2>核心问题<span class="en">The Core Problem</span></h2>
+    <div class="bilingual">
+      <p>Two trading sessions can share <i>identical</i> open, high, low, and close values while representing
+      completely different market structures — one where the close absorbed all the volume, another where
+      buyers and sellers fought to a stalemate at opposite ends of the range. A candlestick cannot tell them
+      apart. It draws the same four numbers, the same rectangle, the same two wicks — every time.</p>
+      <p class="zh">两根K线的开高低收可以完全相同，却对应着截然不同的成交结构——一根可能收盘前放量成交，
+      另一根可能是多空双方在区间两端反复拉锯、谁都没能真正占据主导。传统K线无法区分它们：只要OHLC相同，
+      画出来的矩形和上下影线就完全一样。</p>
+    </div>
+  </section>
+
+  <section class="dark-section" id="pocDemoSection">
+    <h2>同一根K线，两种成交结构<span class="en">Same Candle, Different Market</span></h2>
+    <p style="margin-bottom:22px;">The two sessions below share the exact same open, high, low, and close.
+      Rendered as candlesticks, they are pixel-for-pixel identical. Rendered as Tanghulu, they are unmistakably
+      different sessions.
+      <br><span style="opacity:0.7">下面两个交易日的开高低收完全相同。画成K线，它们像素级一致；串成糖胡芦，
+      两者一眼可辨。</span>
+    </p>
+    <div class="demo-wrap">
+      <div class="demo-canvas-box">
+        <canvas id="pocCanvas"></canvas>
+      </div>
+      <div class="demo-caption-cols">
+        <div class="demo-caption">
+          <b>Demo A · 尾盘强势 Close-heavy</b>
+          Volume clusters tightly near the close. One dominant, gold-ringed bead marks the POC right where
+          price finished — a session where the closing price is also the fair-value price.
+          <br><br>
+          <span style="opacity:0.75">成交高度集中在收盘价附近，金圈标出的POC几乎就在收盘位置——收盘价本身
+          就是当日的“公允价值”。</span>
+        </div>
+        <div class="demo-caption">
+          <b>Demo B · 高低分裂 Bimodal split</b>
+          Volume splits into two peaks near the low and the high, with almost nothing traded in between —
+          a tug-of-war session where neither side ever controlled the middle, and the close is closer to a
+          coin-flip than a consensus.
+          <br><br>
+          <span style="opacity:0.75">成交量在低点与高点附近各自形成一个高峰，中间几乎没有成交——多空反复
+          拉锯，谁都没能真正掌控中间价位，收盘价更像是一次巧合，而非共识。</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="paper-section">
+    <div class="bilingual">
+      <h2>设计说明<span class="en">Design Explanation</span></h2>
+    </div>
+
+    <h3>The skewer 签子</h3>
+    <p>A thin stick runs from the session low to the session high, poking out slightly at both ends —
+      exactly the role a candlestick's wick plays today, just rendered as the physical object it's named after.</p>
+    <p class="card-note zh">一根细签子从当日最低价贯穿到最高价，两端略微探出——它扮演的角色和传统K线的
+      上下影线完全一样，只是被画成了它名字里真正的那根签子。</p>
+
+    <h3>The beads 果子</h3>
+    <p>The price range is split into nine bins. Each bin becomes a bead, or a small round candy, centered at
+      that price level. Bead <b>area</b> — not radius — scales with the volume traded at that price, so the
+      eye reads volume the way it actually perceives area: two beads with twice the trading volume look
+      roughly twice as "heavy," not four times as wide.</p>
+    <p class="card-note zh">把当日价格区间切成9个价位段，每个价位段对应一颗“果子”，居中挂在对应价格上。
+      果子的<b>面积</b>（而不是半径）与该价位的成交量成正比——这样人眼感知到的“分量”才和真实成交量成正比，
+      成交量翻倍的两颗果子看起来是大约两倍“重”，而不是四倍宽。</p>
+
+    <h3>Gloss vs. frost — the Value Area 价值区：亮糖衣与糖霜</h3>
+    <p>Beads inside the session's Value Area (the contiguous price band holding ~70% of the day's volume,
+      expanded outward from the POC) are rendered as glossy, saturated candy. Beads outside it — the thin
+      tails of the distribution — are rendered pale and translucent, like plain fruit with barely a dusting
+      of sugar. The eye is drawn to the glossy core without needing a single number.</p>
+    <p class="card-note zh">落在价值区（从POC向两侧扩展、累计约70%成交量的连续价格带）内的果子，画成饱和有光泽的
+      糖衣质感；落在价值区之外的“尾部”果子，则画成浅淡、半透明的样子，像是没怎么裹糖的果肉。不需要任何数字标注，
+      视线自然会被有光泽的核心区吸引。</p>
+
+    <h3>The gold ring — POC 金圈：POC</h3>
+    <p>The single largest bead — the Point of Control — gets a thin gold ring. It is, quite literally, the
+      shiniest piece of candy on the skewer, because it's the price the market agreed on most.</p>
+    <p class="card-note zh">成交量最大的那颗果子——POC（成交量最大价位）——会被画上一圈细细的金边。它就是
+      整根糖葫芦上最亮的一颗，因为它是市场当天成交最多、认同度最高的价格。</p>
+
+    <h3>Open and close — the ticks 开收盘：左右两撇</h3>
+    <p>A short cream-colored tick reaches left from the skewer at the open, and right at the close — the same
+      left/right convention traders already know from OHLC bar charts, borrowed intentionally so nothing new
+      has to be learned for this part.</p>
+    <p class="card-note zh">在开盘价位置向左伸出一小段浅色刻度，在收盘价位置向右伸出一小段——沿用了OHLC
+      柱状图里交易者早已熟悉的“左开右收”惯例，这部分刻意不引入任何新学习成本。</p>
+
+    <h3>Red or green — the whole skewer 红绿：整根签子的颜色</h3>
+    <p>The entire skewer's palette — beads, gold ring, ticks — shifts between hawthorn red (close ≥ open) and
+      jade green (close &lt; open), matching the red-up/green-down convention already standard across most of
+      Asia's markets.</p>
+    <p class="card-note zh">整根签子的配色（果子、金圈、开收刻度）会在“红色山楂糖葫芦”（收盘≥开盘）与
+      “绿色果脯糖葫芦”（收盘&lt;开盘）之间切换，沿用了多数亚洲市场“红涨绿跌”的既有习惯。</p>
+  </section>
+
+  <section class="paper-section" style="background:var(--paper-2);">
+    <div class="bilingual">
+      <h2>读图指南<span class="en">Interpretation Guide</span></h2>
+    </div>
+    <p>Read a single skewer top to bottom, then read the row left to right.</p>
+    <ol style="max-width:820px;padding-left:20px;">
+      <li><b>Stick length</b> = the day's full range, high to low.
+        <div class="zh" style="opacity:0.7;">签子长度 = 当日最高价到最低价的完整波动区间。</div></li>
+      <li><b>Biggest, gold-ringed bead</b> = the POC — the price the market traded most.
+        <div class="zh" style="opacity:0.7;">最大且带金圈的果子 = POC，当日成交最集中的价格。</div></li>
+      <li><b>Glossy cluster</b> = the Value Area — where ~70% of the day's business actually happened.
+        <div class="zh" style="opacity:0.7;">有光泽的果子聚集区 = 价值区，约70%成交量真正发生的地方。</div></li>
+      <li><b>Left tick / right tick</b> = open / close; <b>color</b> = up (red) or down (green) day.
+        <div class="zh" style="opacity:0.7;">左刻度/右刻度 = 开盘/收盘；颜色 = 上涨（红）或下跌（绿）。</div></li>
+      <li>Scan bead sizes <b>across days</b> to see volume migrate to new price zones over time.
+        <div class="zh" style="opacity:0.7;">横向比较多日果子大小，观察成交重心随时间的迁移。</div></li>
+      <li>Turn on <b>POC Trail</b> to see whether "fair value" is climbing, falling, or holding — independent
+        of what the close price is doing.
+        <div class="zh" style="opacity:0.7;">打开“POC连线”，观察“公允价值”是在上移、下移还是原地不动——
+        这和收盘价的走势可能并不一致。</div></li>
+      <li>Turn on <b>Value-Area Ribbon</b> to see whether the market's accepted range is widening
+        (a possible breakout building) or narrowing (consolidation).
+        <div class="zh" style="opacity:0.7;">打开“价值区带”，观察市场认可的价格区间是在扩张（可能酝酿突破）
+        还是在收窄（进入盘整）。</div></li>
+    </ol>
+  </section>
+
+  <section class="paper-section">
+    <div class="bilingual">
+      <h2>与传统K线对比<span class="en">Comparison with Traditional Candlesticks</span></h2>
+    </div>
+    <table class="compare">
+      <thead>
+        <tr><th>Dimension 维度</th><th>Candlestick K线</th><th>Tanghulu 糖胡芦图</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Open / High / Low / Close</td><td class="tick">✓ Yes</td><td class="tick">✓ Yes</td></tr>
+        <tr><td>Volume-at-price distribution<br><span style="opacity:0.6;">价内成交量分布</span></td><td class="cross">✗ No</td><td class="tick">✓ Yes — bead size</td></tr>
+        <tr><td>Point of Control (POC)</td><td class="cross">✗ No</td><td class="tick">✓ Yes — gold ring</td></tr>
+        <tr><td>Value Area</td><td class="cross">✗ No</td><td class="tick">✓ Yes — gloss vs. frost</td></tr>
+        <tr><td>Distinguishes identical-OHLC days with different structure<br><span style="opacity:0.6;">区分OHLC相同但结构不同的交易日</span></td><td class="cross">✗ No — pixel identical</td><td class="tick">✓ Yes</td></tr>
+        <tr><td>Data required<br><span style="opacity:0.6;">所需数据</span></td><td>OHLC + total volume</td><td>OHLC + intraday volume profile (or simulated)</td></tr>
+        <tr><td>Visual load per session<br><span style="opacity:0.6;">单日视觉负担</span></td><td>Low</td><td>Medium</td></tr>
+        <tr><td>Familiarity<br><span style="opacity:0.6;">成熟度</span></td><td>~100+ years, universal</td><td>New prototype</td></tr>
+        <tr><td>Best suited for<br><span style="opacity:0.6;">适用场景</span></td><td>Fast trend scanning across many symbols</td><td>Structural / auction-market analysis of a single symbol</td></tr>
+      </tbody>
+    </table>
+    <p class="card-note">The Tanghulu Chart is not a replacement for the candlestick — it asks a
+      different question. A candlestick answers "where did price go?" in one glance across hundreds of
+      symbols. A Tanghulu Chart answers "who was actually in control, and at what price?" for the handful
+      of symbols worth that closer look.
+      <br><br><span style="opacity:0.72">糖胡芦图不是要取代K线，而是回答一个不同的问题。K线用一眼扫过成百上千个标的，
+      回答“价格去了哪里”；糖胡芦图则为少数值得深入研究的标的，回答“谁真正掌控了成交，以及在什么价格上”。</span></p>
+  </section>
+
+  <section class="paper-section" style="background:var(--paper-2);">
+    <div class="bilingual">
+      <h2>后续扩展方向<span class="en">Future Extensions</span></h2>
+    </div>
+    <ol class="future" style="max-width:820px;padding-left:20px;">
+      <li><b>Real tick data.</b> Replace the simulated Gaussian-mixture volume profile with actual
+        exchange tick prints binned by price — the bin-building function is already isolated so this is a
+        data-layer swap, not a rendering rewrite.
+        <div class="zh" style="opacity:0.7;">接入真实逐笔成交数据，用真实成交价格分布取代模拟的高斯混合分布——
+        由于分箱逻辑已独立封装，这只是数据层的替换，不需要重写渲染逻辑。</div></li>
+      <li><b>Day-over-day delta markers.</b> A small arrow or shift-indicator showing which direction the
+        POC or Value Area moved versus the prior session, making migration legible without staring at the
+        whole trail.
+        <div class="zh" style="opacity:0.7;">增加逐日POC/价值区迁移的箭头或位移标记，无需盯着整条连线也能
+        快速看出迁移方向。</div></li>
+      <li><b>Order-flow overlays.</b> Encode bid/ask imbalance or open interest as bead outline thickness
+        or a second, inner ring, layering order-flow context onto the existing volume-at-price shape.
+        <div class="zh" style="opacity:0.7;">用果子外圈粗细或内圈的方式叠加买卖盘失衡或持仓量信息，
+        在现有的量价形状上再叠加一层盘口信息。</div></li>
+      <li><b>Volatility-adaptive binning.</b> Size the number of beads per skewer to the session's ATR
+        rather than a fixed count, so quiet days aren't over-segmented and violent days aren't under-resolved.
+        <div class="zh" style="opacity:0.7;">按当日ATR自适应调整果子（分箱）数量，而不是固定数量，
+        避免平静日过度切分、剧烈波动日分辨率不足。</div></li>
+      <li><b>Live, growing beads.</b> For intraday use, beads could grow in real time as volume accrues at
+        each price, turning the chart into a live auction-in-progress view rather than a end-of-day summary.
+        <div class="zh" style="opacity:0.7;">用于盘中场景时，果子可随成交量实时增长，
+        让图表呈现“正在进行的竞价过程”，而不只是收盘后的静态总结。</div></li>
+      <li><b>Weekly / monthly composite skewers.</b> Merge several daily bead sets into one higher-timeframe
+        skewer to study structural shifts over swings rather than single sessions.
+        <div class="zh" style="opacity:0.7;">将多日的果子分布合并为周线/月线级别的复合签子，
+        用于研究更大级别摆动中的结构变化，而不仅是单日结构。</div></li>
+      <li><b>Shareable single-day exports.</b> Let a single skewer be exported as an annotated image for
+        research notes or trade journals, the way a single candle is screenshotted today.
+        <div class="zh" style="opacity:0.7;">支持将单根糖胡芦导出为带标注的图片，
+        用于研究笔记或交易日志，就像今天截取单根K线一样方便。</div></li>
+    </ol>
+  </section>
+
+  <footer>
+    Tanghulu Chart — a prototype visualization language. Built with plain HTML, CSS, and JavaScript; no
+    charting libraries. All data on this page is simulated for demonstration.
+    <br>糖胡芦图原型 · 纯HTML/CSS/JavaScript实现，不依赖任何图表库 · 本页所有数据均为模拟演示数据。
+  </footer>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- PRNG ---------------- */
+  function mulberry32(a){
+    return function(){
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  /* ---------------- data model helpers ---------------- */
+  function buildBins(low, high, volume, modes, numBins){
+    const range = Math.max(high - low, 0.01);
+    const binSize = range / numBins;
+    const raw = [];
+    let total = 0;
+    for(let b=0;b<numBins;b++){
+      const p = low + binSize*(b+0.5);
+      let v = 0;
+      for(const m of modes){
+        v += m.weight * Math.exp(-((p-m.center)**2)/(2*m.sigma*m.sigma));
+      }
+      v = Math.max(v, 0.0015);
+      raw.push(v); total += v;
+    }
+    return raw.map((v,idx)=>({
+      index: idx,
+      price: low + binSize*(idx+0.5),
+      priceLow: low + binSize*idx,
+      priceHigh: low + binSize*(idx+1),
+      volume: (v/total) * volume
+    }));
+  }
+
+  function computeValueArea(bins, totalVolume){
+    let pocIndex = 0;
+    for(let i=1;i<bins.length;i++) if(bins[i].volume > bins[pocIndex].volume) pocIndex = i;
+    let lo = pocIndex, hi = pocIndex, cum = bins[pocIndex].volume;
+    const target = totalVolume * 0.7;
+    while(cum < target && (lo>0 || hi<bins.length-1)){
+      const downVol = lo>0 ? bins[lo-1].volume : -1;
+      const upVol = hi<bins.length-1 ? bins[hi+1].volume : -1;
+      if(upVol >= downVol){ hi++; cum += bins[hi].volume; }
+      else { lo--; cum += bins[lo].volume; }
+    }
+    return { pocIndex, loIndex: lo, hiIndex: hi, priceLow: bins[lo].priceLow, priceHigh: bins[hi].priceHigh, pocPrice: bins[pocIndex].price };
+  }
+
+  function generateDays(n, rng){
+    const days = [];
+    let price = 120 + rng()*30;
+    const dates = [];
+    let d = new Date('2026-07-06T00:00:00');
+    while(dates.length < n){
+      if(d.getDay() !== 0 && d.getDay() !== 6) dates.unshift(new Date(d));
+      d.setDate(d.getDate()-1);
+    }
+    for(let i=0;i<n;i++){
+      const drift = (rng()-0.47) * price * 0.035;
+      const open = price;
+      const close = Math.max(1, open + drift);
+      const wickUp = rng() * price * 0.018;
+      const wickDown = rng() * price * 0.018;
+      const high = Math.max(open, close) + wickUp;
+      const low = Math.max(0.5, Math.min(open, close) - wickDown);
+      const volume = 400000 + rng() * 1600000;
+      const numModes = 1 + Math.floor(rng()*3);
+      const modes = [];
+      for(let m=0;m<numModes;m++){
+        modes.push({
+          center: low + rng()*(high-low),
+          sigma: (high-low) * (0.08 + rng()*0.18),
+          weight: 0.4 + rng()*0.8
+        });
+      }
+      modes.push({ center: close, sigma: (high-low)*0.09, weight: 0.9 + rng()*0.6 });
+      const bins = buildBins(low, high, volume, modes, 9);
+      const va = computeValueArea(bins, volume);
+      days.push({ date: dates[i], open, high, low, close, volume, bins, va });
+      price = close + (rng()-0.5)*close*0.006;
+    }
+    return days;
+  }
+
+  function fmtVol(v){
+    if(v>=1e6) return (v/1e6).toFixed(2)+'M';
+    if(v>=1e3) return (v/1e3).toFixed(0)+'K';
+    return v.toFixed(0);
+  }
+  function fmtDate(d){
+    return (d.getMonth()+1).toString().padStart(2,'0')+'/'+d.getDate().toString().padStart(2,'0');
+  }
+  function fmtDateFull(d){
+    return d.getFullYear()+'-'+(d.getMonth()+1).toString().padStart(2,'0')+'-'+d.getDate().toString().padStart(2,'0');
+  }
+
+  /* ---------------- canvas helpers ---------------- */
+  function setupCanvas(canvas, w, h){
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = w*dpr;
+    canvas.height = h*dpr;
+    canvas.style.width = w+'px';
+    canvas.style.height = h+'px';
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    return ctx;
+  }
+
+  function roundRect(ctx,x,y,w,h,r){
+    if(h<0){ y=y+h; h=-h; }
+    r = Math.min(r, w/2, Math.max(h/2,0.01));
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+
+  function buildYScale(days, plotTop, plotH){
+    let mn=Infinity, mx=-Infinity;
+    days.forEach(d=>{ mn=Math.min(mn,d.low); mx=Math.max(mx,d.high); });
+    const pad=(mx-mn)*0.08 || 1;
+    mn-=pad; mx+=pad;
+    return { min:mn, max:mx, toY:(p)=> plotTop + plotH*(1-(p-mn)/(mx-mn)) };
+  }
+
+  function getMaxVolBin(days){
+    let mx=0;
+    days.forEach(d=>d.bins.forEach(b=>{ if(b.volume>mx) mx=b.volume; }));
+    return mx || 1;
+  }
+
+  function beadRadius(v, maxVolBin, dayWidth){
+    const rMin=2.2, rMax=dayWidth*0.44;
+    const t = Math.sqrt(Math.max(v,0)/maxVolBin);
+    return rMin + (rMax-rMin)*t;
+  }
+
+  function drawTanghuluDay(ctx, day, x, dayWidth, yScale, maxVolBin){
+    const up = day.close >= day.open;
+    const yHigh = yScale.toY(day.high);
+    const yLow = yScale.toY(day.low);
+
+    const yVaTop = yScale.toY(day.va.priceHigh);
+    const yVaBot = yScale.toY(day.va.priceLow);
+    ctx.fillStyle = up ? 'rgba(200,40,58,0.10)' : 'rgba(63,125,92,0.12)';
+    roundRect(ctx, x-dayWidth*0.36, yVaTop, dayWidth*0.72, yVaBot-yVaTop, 6);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(169,131,90,0.9)';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x, yHigh-9);
+    ctx.lineTo(x, yLow+9);
+    ctx.stroke();
+
+    day.bins.forEach((bin)=>{
+      if(bin.volume<=0) return;
+      const r = beadRadius(bin.volume, maxVolBin, dayWidth);
+      if(r<1.6) return;
+      const cy = yScale.toY(bin.price);
+      const inVA = bin.index>=day.va.loIndex && bin.index<=day.va.hiIndex;
+      const grad = ctx.createRadialGradient(x-r*0.35, cy-r*0.35, r*0.12, x, cy, r);
+      if(inVA){
+        grad.addColorStop(0, up ? '#f0a3ae' : '#b7e0c9');
+        grad.addColorStop(0.55, up ? '#c8283a' : '#3f7d5c');
+        grad.addColorStop(1, up ? '#8f1524' : '#245038');
+        ctx.globalAlpha = 0.97;
+      } else {
+        grad.addColorStop(0, up ? 'rgba(240,163,174,0.55)' : 'rgba(183,224,201,0.55)');
+        grad.addColorStop(1, up ? 'rgba(200,40,58,0.24)' : 'rgba(63,125,92,0.24)');
+        ctx.globalAlpha = 0.8;
+      }
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x, cy, r, 0, Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      if(bin.index === day.va.pocIndex){
+        ctx.save();
+        ctx.strokeStyle = '#dba233';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, cy, r+3, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    });
+
+    const yOpen = yScale.toY(day.open);
+    const yClose = yScale.toY(day.close);
+    ctx.strokeStyle = 'rgba(246,234,215,0.92)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x-dayWidth*0.42, yOpen);
+    ctx.lineTo(x-3, yOpen);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x+3, yClose);
+    ctx.lineTo(x+dayWidth*0.42, yClose);
+    ctx.stroke();
+  }
+
+  function drawCandleDay(ctx, day, x, dayWidth, yScale){
+    const up = day.close >= day.open;
+    const col = up ? '#c8283a' : '#3f7d5c';
+    ctx.strokeStyle = col;
+    ctx.fillStyle = col;
+    ctx.lineWidth = 1.5;
+    const yHigh = yScale.toY(day.high), yLow = yScale.toY(day.low);
+    const yOpen = yScale.toY(day.open), yClose = yScale.toY(day.close);
+    ctx.beginPath();
+    ctx.moveTo(x,yHigh); ctx.lineTo(x,yLow); ctx.stroke();
+    const bodyW = dayWidth*0.55;
+    const top = Math.min(yOpen,yClose);
+    const h = Math.max(2, Math.abs(yClose-yOpen));
+    ctx.fillRect(x-bodyW/2, top, bodyW, h);
+  }
+
+  function drawOverlays(ctx, days, xScaleFn, yScale, opts){
+    if(opts.vaRibbon){
+      ctx.fillStyle = 'rgba(219,162,51,0.10)';
+      ctx.beginPath();
+      days.forEach((d,i)=>{ const x=xScaleFn(i); const y=yScale.toY(d.va.priceHigh); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+      for(let i=days.length-1;i>=0;i--){ const x=xScaleFn(i); const y=yScale.toY(days[i].va.priceLow); ctx.lineTo(x,y); }
+      ctx.closePath(); ctx.fill();
+    }
+    if(opts.closeLine){
+      ctx.strokeStyle = 'rgba(246,234,215,0.5)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2,2]);
+      ctx.beginPath();
+      days.forEach((d,i)=>{ const x=xScaleFn(i); const y=yScale.toY(d.close); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+    if(opts.pocTrail){
+      ctx.strokeStyle = '#dba233';
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([4,3]);
+      ctx.beginPath();
+      days.forEach((d,i)=>{ const x=xScaleFn(i); const y=yScale.toY(d.va.pocPrice); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
+
+  /* ---------------- main chart setup ---------------- */
+  const LOGICAL_W = 1180, LOGICAL_H = 620;
+  const marginLeft=58, marginRight=20, marginTop=20, marginBottom=34;
+  const plotW = LOGICAL_W - marginLeft - marginRight;
+  const plotH = LOGICAL_H - marginTop - marginBottom;
+  const NUM_DAYS = 30;
+  const dayWidth = plotW / NUM_DAYS;
+
+  const mainCanvas = document.getElementById('mainCanvas');
+  const mainCtx = setupCanvas(mainCanvas, LOGICAL_W, LOGICAL_H);
+
+  function xScaleFn(i){ return marginLeft + dayWidth*(i+0.5); }
+
+  const state = {
+    days: generateDays(NUM_DAYS, mulberry32(20260706)),
+    mode: 'tanghulu',
+    overlays: { vaRibbon:true, pocTrail:true, closeLine:false }
+  };
+
+  function drawAxes(ctx, yScale){
+    ctx.font = "11px 'SF Mono', Consolas, monospace";
+    ctx.textBaseline = 'middle';
+    const steps = 6;
+    for(let i=0;i<=steps;i++){
+      const p = yScale.min + (yScale.max-yScale.min)*i/steps;
+      const y = yScale.toY(p);
+      ctx.strokeStyle = 'rgba(246,234,215,0.08)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(marginLeft, y);
+      ctx.lineTo(marginLeft+plotW, y);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(246,234,215,0.5)';
+      ctx.fillText(p.toFixed(2), 6, y);
+    }
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = "11px 'PingFang SC', system-ui, sans-serif";
+    ctx.fillStyle = 'rgba(246,234,215,0.5)';
+    state.days.forEach((d,i)=>{
+      if(i % 2 !== 0) return;
+      const x = xScaleFn(i);
+      ctx.fillText(fmtDate(d.date), x-14, marginTop+plotH+20);
+    });
+  }
+
+  function render(){
+    mainCtx.clearRect(0,0,LOGICAL_W,LOGICAL_H);
+    const yScale = buildYScale(state.days, marginTop, plotH);
+    drawAxes(mainCtx, yScale);
+    const maxVolBin = getMaxVolBin(state.days);
+    state.days.forEach((day,i)=>{
+      const x = xScaleFn(i);
+      if(state.mode === 'tanghulu') drawTanghuluDay(mainCtx, day, x, dayWidth, yScale, maxVolBin);
+      else drawCandleDay(mainCtx, day, x, dayWidth, yScale);
+    });
+    if(state.mode === 'tanghulu') drawOverlays(mainCtx, state.days, xScaleFn, yScale, state.overlays);
+  }
+
+  /* mode toggle */
+  const modeToggle = document.getElementById('modeToggle');
+  modeToggle.addEventListener('click', (e)=>{
+    const btn = e.target.closest('button');
+    if(!btn) return;
+    state.mode = btn.dataset.mode;
+    [...modeToggle.querySelectorAll('button')].forEach(b=>b.classList.toggle('active', b===btn));
+    document.getElementById('overlayToggles').style.opacity = state.mode==='tanghulu' ? '1' : '0.35';
+    document.getElementById('overlayToggles').style.pointerEvents = state.mode==='tanghulu' ? 'auto' : 'none';
+    render();
+  });
+
+  ['ov-va','ov-poc','ov-close'].forEach((id)=>{
+    document.getElementById(id).addEventListener('change', ()=>{
+      state.overlays.vaRibbon = document.getElementById('ov-va').checked;
+      state.overlays.pocTrail = document.getElementById('ov-poc').checked;
+      state.overlays.closeLine = document.getElementById('ov-close').checked;
+      render();
+    });
+  });
+
+  document.getElementById('regenBtn').addEventListener('click', ()=>{
+    state.days = generateDays(NUM_DAYS, mulberry32(Date.now() % 2147483647));
+    render();
+  });
+
+  /* tooltip */
+  const tooltip = document.getElementById('tooltip');
+  mainCanvas.addEventListener('mousemove', (e)=>{
+    const rect = mainCanvas.getBoundingClientRect();
+    const mx = (e.clientX-rect.left) * (LOGICAL_W/rect.width);
+    const my = (e.clientY-rect.top) * (LOGICAL_H/rect.height);
+    const i = Math.floor((mx-marginLeft)/dayWidth);
+    if(i<0 || i>=state.days.length || my<marginTop || my>marginTop+plotH){
+      tooltip.style.display='none';
+      return;
+    }
+    const day = state.days[i];
+    const up = day.close >= day.open;
+    tooltip.style.display='block';
+    let left = e.clientX+16, top = e.clientY+16;
+    if(left+220 > window.innerWidth) left = e.clientX-236;
+    tooltip.style.left = left+'px';
+    tooltip.style.top = top+'px';
+    tooltip.innerHTML =
+      '<div class="tt-title">'+fmtDateFull(day.date)+' · '+(up?'涨 UP':'跌 DOWN')+'</div>'+
+      '<div class="tt-row"><span class="tt-label">开 Open</span><span>'+day.open.toFixed(2)+'</span></div>'+
+      '<div class="tt-row"><span class="tt-label">高 High</span><span>'+day.high.toFixed(2)+'</span></div>'+
+      '<div class="tt-row"><span class="tt-label">低 Low</span><span>'+day.low.toFixed(2)+'</span></div>'+
+      '<div class="tt-row"><span class="tt-label">收 Close</span><span>'+day.close.toFixed(2)+'</span></div>'+
+      '<div class="tt-row"><span class="tt-label">量 Volume</span><span>'+fmtVol(day.volume)+'</span></div>'+
+      '<div class="tt-row" style="color:#dba233"><span class="tt-label" style="color:#dba233">POC</span><span>'+day.va.pocPrice.toFixed(2)+'</span></div>'+
+      '<div class="tt-row"><span class="tt-label">价值区 VA</span><span>'+day.va.priceLow.toFixed(2)+' – '+day.va.priceHigh.toFixed(2)+'</span></div>';
+  });
+  mainCanvas.addEventListener('mouseleave', ()=>{ tooltip.style.display='none'; });
+
+  render();
+
+  /* ---------------- legend ---------------- */
+  (function buildLegend(){
+    const legend = document.getElementById('legend');
+    const items = [
+      { svg: '<svg viewBox="0 0 26 26"><line x1="13" y1="2" x2="13" y2="24" stroke="#a9835a" stroke-width="2.5" stroke-linecap="round"/></svg>', label:'签子 Skewer = 当日最高–最低价 High–Low range' },
+      { svg: '<svg viewBox="0 0 26 26"><circle cx="13" cy="13" r="8" fill="#c8283a"/></svg>', label:'果子大小 Bead size = 该价位成交量 Volume at that price' },
+      { svg: '<svg viewBox="0 0 26 26"><circle cx="13" cy="13" r="7" fill="#c8283a" opacity="0.35"/></svg>', label:'淡色果子 Pale bead = 价值区之外（尾部）Outside Value Area' },
+      { svg: '<svg viewBox="0 0 26 26"><circle cx="13" cy="13" r="7" fill="#c8283a"/><circle cx="13" cy="13" r="10" fill="none" stroke="#dba233" stroke-width="2"/></svg>', label:'金圈 Gold ring = POC 最大成交价位' },
+      { svg: '<svg viewBox="0 0 26 26"><rect x="4" y="7" width="18" height="12" rx="3" fill="#dba233" opacity="0.22"/></svg>', label:'底色带 Shaded band = 价值区（约70%成交量）Value Area (~70% volume)' },
+      { svg: '<svg viewBox="0 0 26 26"><line x1="3" y1="9" x2="12" y2="9" stroke="#f6ead7" stroke-width="2"/><line x1="14" y1="17" x2="23" y2="17" stroke="#f6ead7" stroke-width="2"/></svg>', label:'左/右刻度 Left/right tick = 开盘/收盘 Open / Close' },
+      { svg: '<svg viewBox="0 0 26 26"><circle cx="9" cy="13" r="7" fill="#c8283a"/></svg><svg viewBox="0 0 26 26" style="margin-left:-8px"><circle cx="17" cy="13" r="7" fill="#3f7d5c"/></svg>', label:'红/绿 Red / Green = 涨/跌 Up / Down day' }
+    ];
+    legend.innerHTML = items.map(it=>
+      '<div class="legend-item"><span class="legend-glyph">'+it.svg+'</span><span>'+it.label+'</span></div>'
+    ).join('');
+  })();
+
+  /* ---------------- proof-of-concept demo ---------------- */
+  (function buildPocDemo(){
+    const canvas = document.getElementById('pocCanvas');
+    const W = 620, H = 380;
+    const ctx = setupCanvas(canvas, W, H);
+
+    const shared = { open:100, high:108, low:97, close:105, volume:1000000 };
+    const demoA = Object.assign({}, shared, {
+      bins: buildBins(shared.low, shared.high, shared.volume, [{center:104.5, sigma:2.0, weight:1}], 9)
+    });
+    demoA.va = computeValueArea(demoA.bins, demoA.volume);
+    const demoB = Object.assign({}, shared, {
+      bins: buildBins(shared.low, shared.high, shared.volume, [
+        {center:99, sigma:1.5, weight:0.95},
+        {center:106, sigma:1.3, weight:0.95}
+      ], 9)
+    });
+    demoB.va = computeValueArea(demoB.bins, demoB.volume);
+
+    const colW = W/2;
+    const candleTop=14, candleH=64;
+    const tangTop=100, tangH=H-tangTop-16;
+
+    const yScaleCandle = buildYScale([shared], candleTop, candleH);
+    const yScaleTang = buildYScale([shared], tangTop, tangH);
+
+    function label(x, text){
+      ctx.font = "12px 'PingFang SC', system-ui, sans-serif";
+      ctx.fillStyle = 'rgba(246,234,215,0.55)';
+      ctx.textAlign='center';
+      ctx.fillText(text, x, candleTop-2);
+      ctx.textAlign='start';
+    }
+
+    ctx.clearRect(0,0,W,H);
+    // divider
+    ctx.strokeStyle='rgba(246,234,215,0.10)';
+    ctx.beginPath(); ctx.moveTo(colW,10); ctx.lineTo(colW,H-10); ctx.stroke();
+
+    label(colW*0.5, 'Demo A — 尾盘强势');
+    label(colW*1.5, 'Demo B — 高低分裂');
+
+    drawCandleDay(ctx, demoA, colW*0.5, 46, yScaleCandle);
+    drawCandleDay(ctx, demoB, colW*1.5, 46, yScaleCandle);
+
+    ctx.font = "10.5px 'SF Mono', Consolas, monospace";
+    ctx.fillStyle='rgba(246,234,215,0.4)';
+    ctx.textAlign='center';
+    ctx.fillText('identical OHLC · 完全相同', W/2, candleTop+candleH+14);
+    ctx.textAlign='start';
+
+    const maxVolBinDemo = Math.max(getMaxVolBin([demoA]), getMaxVolBin([demoB]));
+    drawTanghuluDay(ctx, demoA, colW*0.5, 84, yScaleTang, maxVolBinDemo);
+    drawTanghuluDay(ctx, demoB, colW*1.5, 84, yScaleTang, maxVolBinDemo);
+  })();
+
+})();
+</script>
+</body>
+</html>

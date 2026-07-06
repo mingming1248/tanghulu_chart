@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tanghulu Chart | 糖胡芦图</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; overflow: hidden; }
+        canvas { display: block; cursor: crosshair; }
+        .tooltip {
+            position: absolute;
+            background: rgba(22, 27, 34, 0.9);
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            font-size: 13px;
+            z-index: 10;
+        }
+        .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+        .color-box { width: 12px; height: 12px; border-radius: 2px; }
+    </style>
+</head>
+<body class="flex flex-col h-screen">
+
+    <!-- Header & Legends -->
+    <div class="p-4 border-b border-gray-800 flex justify-between items-center bg-[#161b22]">
+        <div>
+            <h1 class="text-xl font-bold text-white tracking-wider">TANGHULU CHART <span class="text-gray-500 text-sm font-normal ml-2">糖胡芦图 - 市场微观结构可视化 (Market Microstructure Visualization)</span></h1>
+        </div>
+        <div class="flex gap-4">
+            <div class="legend-item"><div class="color-box bg-[#00ffcc]"></div> Up / 涨</div>
+            <div class="legend-item"><div class="color-box bg-[#ff0055]"></div> Down / 跌</div>
+            <div class="legend-item"><div class="color-box bg-[#ffd700] h-[2px] mt-[5px]"></div> POC / 重心</div>
+            <div class="legend-item"><div class="w-4 h-4 rounded-full border border-gray-500 flex items-center justify-center bg-gray-700/50">VA</div> Value Area / 70%价值区</div>
+        </div>
+    </div>
+
+    <!-- Canvas Container -->
+    <div class="relative flex-1 w-full h-full" id="chart-container">
+        <canvas id="tanghulu-canvas"></canvas>
+        <div id="tooltip" class="tooltip">
+            <div class="font-bold text-gray-400 mb-2 border-b border-gray-700 pb-1" id="tt-date">Date</div>
+            <div class="grid grid-cols-2 gap-x-4 gap-y-1">
+                <span class="text-gray-500">Open:</span> <span id="tt-o" class="text-right text-white font-mono">0</span>
+                <span class="text-gray-500">High:</span> <span id="tt-h" class="text-right text-white font-mono">0</span>
+                <span class="text-gray-500">Low:</span> <span id="tt-l" class="text-right text-white font-mono">0</span>
+                <span class="text-gray-500">Close:</span> <span id="tt-c" class="text-right text-white font-mono">0</span>
+            </div>
+            <div class="mt-2 pt-2 border-t border-gray-700 grid grid-cols-2 gap-x-4 gap-y-1">
+                <span class="text-gray-500">POC:</span> <span id="tt-poc" class="text-right text-[#ffd700] font-bold font-mono">0</span>
+                <span class="text-gray-500">VA High:</span> <span id="tt-vah" class="text-right text-white font-mono">0</span>
+                <span class="text-gray-500">VA Low:</span> <span id="tt-val" class="text-right text-white font-mono">0</span>
+                <span class="text-gray-500">Total Vol:</span> <span id="tt-vol" class="text-right text-white font-mono">0</span>
+            </div>
+        </div>
+    </div>
+
+<script>
+/**
+ * Tanghulu Chart - Core Logic
+ */
+const NUM_DAYS = 35;
+const PROFILE_BINS = 100; // Resolution of the volume profile
+let chartData = [];
+
+// Color Palette
+const COLORS = {
+    up: { main: '#00ffcc', fill: 'rgba(0, 255, 204, 0.7)', light: 'rgba(0, 255, 204, 0.15)', line: '#00ccaa' },
+    down: { main: '#ff0055', fill: 'rgba(255, 0, 85, 0.7)', light: 'rgba(255, 0, 85, 0.15)', line: '#cc0044' },
+    poc: '#ffd700',
+    grid: '#21262d',
+    text: '#8b949e'
+};
+
+// 1. Data Generation (Simulating OHLC + Volume Profile)
+function generateData() {
+    let data = [];
+    let currentPrice = 1000;
+    let baseDate = new Date();
+    baseDate.setDate(baseDate.getDate() - NUM_DAYS);
+
+    for (let i = 0; i < NUM_DAYS; i++) {
+        let date = new Date(baseDate);
+        date.setDate(date.getDate() + i);
+
+        // Random Walk for OHLC
+        let open = currentPrice + (Math.random() - 0.5) * 10;
+        let volatility = 10 + Math.random() * 30; // Random daily range
+        let high = open + Math.random() * volatility;
+        let low = open - Math.random() * volatility;
+        let close = low + Math.random() * (high - low);
+        currentPrice = close;
+
+        // Generate Volume Profile (The "Tanghulu" shape)
+        // We use 3 Gaussian peaks to simulate the "candied haws" look
+        let profile = new Array(PROFILE_BINS).fill(0);
+        let totalVol = 0;
+        
+        let peaks = [
+            { price: low + Math.random()*(high-low), width: (high-low)*0.1, weight: Math.random()*100 + 50 },
+            { price: low + Math.random()*(high-low), width: (high-low)*0.15, weight: Math.random()*80 + 30 },
+            { price: close, width: (high-low)*0.05, weight: Math.random()*120 + 80 } // Usually a peak near close
+        ];
+
+        let binSize = (high - low) / PROFILE_BINS;
+        
+        for (let b = 0; b < PROFILE_BINS; b++) {
+            let p = low + (b * binSize) + (binSize / 2);
+            let vol = 5; // Base noise volume
+            
+            // Add gaussian distributions
+            peaks.forEach(peak => {
+                let dist = Math.abs(p - peak.price);
+                vol += peak.weight * Math.exp(-(dist * dist) / (2 * peak.width * peak.width));
+            });
+            
+            profile[b] = vol;
+            totalVol += vol;
+        }
+
+        // Calculate POC (Point of Control)
+        let maxVol = 0;
+        let pocIndex = 0;
+        for (let b = 0; b < PROFILE_BINS; b++) {
+            if (profile[b] > maxVol) {
+                maxVol = profile[b];
+                pocIndex = b;
+            }
+        }
+        let poc = low + (pocIndex * binSize) + (binSize / 2);
+
+        // Calculate Value Area (70% of total volume around POC)
+        let targetVol = totalVol * 0.70;
+        let currentVol = profile[pocIndex];
+        let upIndex = pocIndex + 1;
+        let downIndex = pocIndex - 1;
+        
+        while (currentVol < targetVol && (upIndex < PROFILE_BINS || downIndex >= 0)) {
+            let upVol = upIndex < PROFILE_BINS ? profile[upIndex] : -1;
+            let downVol = downIndex >= 0 ? profile[downIndex] : -1;
+
+            if (upVol > downVol) {
+                currentVol += upVol;
+                upIndex++;
+            } else {
+                currentVol += downVol;
+                downIndex--;
+            }
+        }
+        
+        let vaLow = low + (Math.max(0, downIndex + 1) * binSize);
+        let vaHigh = low + (Math.min(PROFILE_BINS - 1, upIndex - 1) * binSize);
+
+        data.push({
+            date: date.toISOString().split('T')[0],
+            open, high, low, close,
+            profile, profileBins: PROFILE_BINS, binSize, maxVol, totalVol,
+            poc, vaLow, vaHigh,
+            isUp: close >= open
+        });
+    }
+    return data;
+}
+
+// 2. Rendering Engine
+const canvas = document.getElementById('tanghulu-canvas');
+const ctx = canvas.getContext('2d', { alpha: false });
+const container = document.getElementById('chart-container');
+const tooltip = document.getElementById('tooltip');
+
+let width, height;
+let minPrice = Infinity, maxPrice = -Infinity;
+const PADDING = { top: 40, bottom: 40, left: 20, right: 80 };
+
+function initChart() {
+    chartData = generateData();
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    setupInteractivity();
+}
+
+function resizeCanvas() {
+    // Handle High-DPI displays
+    const dpr = window.devicePixelRatio || 1;
+    const rect = container.getBoundingClientRect();
+    
+    width = rect.width;
+    height = rect.height;
+    
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    
+    ctx.scale(dpr, dpr);
+    
+    // Find global min/max for Y axis
+    minPrice = Math.min(...chartData.map(d => d.low));
+    maxPrice = Math.max(...chartData.map(d => d.high));
+    
+    // Add 5% padding to price
+    const range = maxPrice - minPrice;
+    minPrice -= range * 0.05;
+    maxPrice += range * 0.05;
+
+    drawChart();
+}
+
+function mapY(price) {
+    return PADDING.top + (height - PADDING.top - PADDING.bottom) * (1 - (price - minPrice) / (maxPrice - minPrice));
+}
+
+function mapX(index) {
+    const drawableWidth = width - PADDING.left - PADDING.right;
+    const step = drawableWidth / (NUM_DAYS + 1);
+    return PADDING.left + step * (index + 1);
+}
+
+function drawChart(hoverIndex = -1, mousePos = null) {
+    // Clear background
+    ctx.fillStyle = '#0d1117';
+    ctx.fillRect(0, 0, width, height);
+
+    // Draw Grid & Axes
+    drawAxes();
+
+    const maxCandleWidth = (width - PADDING.left - PADDING.right) / NUM_DAYS * 0.85; // 85% of gap
+
+    // Draw each Tanghulu
+    chartData.forEach((day, i) => {
+        const xCenter = mapX(i);
+        const yHigh = mapY(day.high);
+        const yLow = mapY(day.low);
+        const yOpen = mapY(day.open);
+        const yClose = mapY(day.close);
+        const colorSet = day.isUp ? COLORS.up : COLORS.down;
+        
+        // Dim unhovered items if interacting
+        const isHovered = hoverIndex === i;
+        const opacity = (hoverIndex === -1 || isHovered) ? 1 : 0.3;
+        ctx.globalAlpha = opacity;
+
+        // 1. Draw The Skewer (Main Vertical Axis)
+        ctx.beginPath();
+        ctx.moveTo(xCenter, yHigh);
+        ctx.lineTo(xCenter, yLow);
+        ctx.strokeStyle = colorSet.line;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // 2. Draw Volume Profile (The Haws/Body)
+        // We split this into rendering the outer body and the inner Value Area
+        
+        // Path generator function
+        const createProfilePath = (limitToVA = false) => {
+            ctx.beginPath();
+            ctx.moveTo(xCenter, mapY(day.low));
+            
+            // Right Side
+            for (let b = 0; b < day.profileBins; b++) {
+                let p = day.low + (b * day.binSize) + (day.binSize / 2);
+                if (limitToVA && (p < day.vaLow || p > day.vaHigh)) continue;
+                
+                let y = mapY(p);
+                let w = (day.profile[b] / day.maxVol) * (maxCandleWidth / 2);
+                if(b === 0 && limitToVA) ctx.moveTo(xCenter, y);
+                ctx.lineTo(xCenter + w, y);
+            }
+            if(limitToVA) ctx.lineTo(xCenter, mapY(day.vaHigh));
+            else ctx.lineTo(xCenter, mapY(day.high));
+
+            // Left Side
+            for (let b = day.profileBins - 1; b >= 0; b--) {
+                let p = day.low + (b * day.binSize) + (day.binSize / 2);
+                if (limitToVA && (p < day.vaLow || p > day.vaHigh)) continue;
+                
+                let y = mapY(p);
+                let w = (day.profile[b] / day.maxVol) * (maxCandleWidth / 2);
+                if(b === day.profileBins -1 && limitToVA) ctx.lineTo(xCenter, y);
+                ctx.lineTo(xCenter - w, y);
+            }
+            if(limitToVA) ctx.lineTo(xCenter, mapY(day.vaLow));
+            else ctx.lineTo(xCenter, mapY(day.low));
+            
+            ctx.closePath();
+        };
+
+        // Draw Full Outline & Light Fill (Non-VA)
+        createProfilePath(false);
+        ctx.fillStyle = colorSet.light;
+        ctx.fill();
+        ctx.strokeStyle = colorSet.main;
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+
+        // Draw Value Area (VA) - Heavy Fill
+        createProfilePath(true);
+        ctx.fillStyle = colorSet.fill;
+        ctx.fill();
+
+        // 3. Draw Open and Close Marks
+        ctx.beginPath();
+        ctx.moveTo(xCenter, yOpen);
+        ctx.lineTo(xCenter - 8, yOpen); // Open points left
+        ctx.moveTo(xCenter, yClose);
+        ctx.lineTo(xCenter + 8, yClose); // Close points right
+        ctx.strokeStyle = colorSet.main;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 4. Draw POC (Point of Control)
+        let yPoc = mapY(day.poc);
+        let pocWidth = (maxCandleWidth / 2) + 4; // Slightly wider than max profile
+        ctx.beginPath();
+        ctx.moveTo(xCenter - pocWidth, yPoc);
+        ctx.lineTo(xCenter + pocWidth, yPoc);
+        ctx.strokeStyle = COLORS.poc;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        ctx.globalAlpha = 1.0; // Reset alpha
+    });
+
+    // Draw Crosshair & Axis Labels if hovering
+    if (mousePos && hoverIndex !== -1) {
+        drawCrosshair(mousePos.x, mousePos.y, chartData[hoverIndex]);
+    }
+}
+
+function drawAxes() {
+    ctx.strokeStyle = COLORS.grid;
+    ctx.lineWidth = 1;
+    ctx.fillStyle = COLORS.text;
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+
+    // Y-Axis Grid Lines & Labels
+    const numYLines = 10;
+    const yStep = (maxPrice - minPrice) / numYLines;
+    for (let i = 0; i <= numYLines; i++) {
+        let price = minPrice + (i * yStep);
+        let y = mapY(price);
+        
+        ctx.beginPath();
+        ctx.moveTo(PADDING.left, y);
+        ctx.lineTo(width - PADDING.right, y);
+        ctx.stroke();
+
+        ctx.fillText(price.toFixed(2), width - PADDING.right + 10, y);
+    }
+}
+
+function drawCrosshair(mouseX, mouseY, hoveredDay) {
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = 'rgba(139, 148, 158, 0.5)';
+    ctx.lineWidth = 1;
+
+    // Vertical line
+    ctx.beginPath();
+    ctx.moveTo(mouseX, PADDING.top);
+    ctx.lineTo(mouseX, height - PADDING.bottom);
+    ctx.stroke();
+
+    // Horizontal line
+    ctx.beginPath();
+    ctx.moveTo(PADDING.left, mouseY);
+    ctx.lineTo(width - PADDING.right, mouseY);
+    ctx.stroke();
+    
+    ctx.setLineDash([]); // Reset
+
+    // Hovered Price Tag on Y Axis
+    const hoverPrice = minPrice + (maxPrice - minPrice) * (1 - (mouseY - PADDING.top) / (height - PADDING.top - PADDING.bottom));
+    if (hoverPrice <= maxPrice && hoverPrice >= minPrice) {
+        ctx.fillStyle = '#f0f6fc';
+        ctx.fillRect(width - PADDING.right + 5, mouseY - 10, 65, 20);
+        ctx.fillStyle = '#0d1117';
+        ctx.fillText(hoverPrice.toFixed(2), width - PADDING.right + 10, mouseY);
+    }
+}
+
+function setupInteractivity() {
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        // Find closest data point
+        let closestIndex = -1;
+        let minDistance = Infinity;
+
+        chartData.forEach((day, i) => {
+            const x = mapX(i);
+            const dist = Math.abs(mouseX - x);
+            if (dist < minDistance) {
+                minDistance = dist;
+                closestIndex = i;
+            }
+        });
+
+        const maxCandleWidth = (width - PADDING.left - PADDING.right) / NUM_DAYS;
+
+        // Threshold for hover
+        if (minDistance < maxCandleWidth) {
+            drawChart(closestIndex, { x: mapX(closestIndex), y: mouseY });
+            updateTooltip(chartData[closestIndex], e.clientX, e.clientY);
+        } else {
+            drawChart(-1, { x: mouseX, y: mouseY });
+            tooltip.style.opacity = 0;
+        }
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+        drawChart();
+        tooltip.style.opacity = 0;
+    });
+}
+
+function updateTooltip(data, mouseX, mouseY) {
+    document.getElementById('tt-date').innerText = data.date;
+    document.getElementById('tt-o').innerText = data.open.toFixed(2);
+    document.getElementById('tt-h').innerText = data.high.toFixed(2);
+    document.getElementById('tt-l').innerText = data.low.toFixed(2);
+    document.getElementById('tt-c').innerText = data.close.toFixed(2);
+    
+    document.getElementById('tt-poc').innerText = data.poc.toFixed(2);
+    document.getElementById('tt-vah').innerText = data.vaHigh.toFixed(2);
+    document.getElementById('tt-val').innerText = data.vaLow.toFixed(2);
+    document.getElementById('tt-vol').innerText = Math.round(data.totalVol).toLocaleString();
+
+    // Color code close price based on direction
+    const color = data.isUp ? COLORS.up.main : COLORS.down.main;
+    document.getElementById('tt-c').style.color = color;
+    document.getElementById('tt-o').style.color = color;
+
+    // Tooltip positioning
+    let ttWidth = 220;
+    let ttHeight = 150;
+    let x = mouseX + 20;
+    let y = mouseY + 20;
+
+    if (x + ttWidth > window.innerWidth) x = mouseX - ttWidth - 20;
+    if (y + ttHeight > window.innerHeight) y = window.innerHeight - ttHeight - 20;
+
+    tooltip.style.left = `${x}px`;
+    tooltip.style.top = `${y}px`;
+    tooltip.style.opacity = 1;
+}
+
+// Boot
+initChart();
+
+</script>
+</body>
+</html>

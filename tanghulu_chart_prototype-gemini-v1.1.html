@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>糖胡芦图 (Tanghulu Chart) - 金融可视化原型</title>
+    <style>
+        :root {
+            --bg-color: #0d1117; /* 深色背景 */
+            --text-color: #c9d1d9;
+            --grid-color: #30363d;
+            --up-color: rgba(46, 160, 67, 0.65); /* 阳线（涨）绿色 - 半透明以体现质感 */
+            --down-color: rgba(248, 81, 73, 0.65); /* 阴线（跌）红色 - 半透明以体现质感 */
+            --up-poc: #3fb950; /* 涨势 POC 高亮 */
+            --down-poc: #ff7b72; /* 跌势 POC 高亮 */
+            --skewer-color: #8b949e; /* “竹签”（影线）颜色 */
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding-bottom: 40px;
+        }
+
+        header {
+            padding: 20px 20px 10px 20px;
+            text-align: center;
+            width: 100%;
+        }
+
+        h1 { margin: 0; font-size: 1.8rem; font-weight: 600; letter-spacing: 1px; color: #ffffff; }
+        p.subtitle { margin: 8px 0 0; color: #8b949e; font-size: 0.95rem; }
+
+        #chart-container {
+            width: 92vw;
+            height: 60vh;
+            background: #161b22;
+            border: 1px solid var(--grid-color);
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            margin-top: 15px;
+        }
+
+        #chart-svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .axis-label {
+            fill: #8b949e;
+            font-size: 11px;
+            user-select: none;
+        }
+
+        .grid-line {
+            stroke: var(--grid-color);
+            stroke-width: 1;
+            stroke-dasharray: 4, 4;
+        }
+
+        /* 控制面板 */
+        #controls {
+            margin: 20px;
+            display: flex;
+            gap: 15px;
+        }
+
+        button {
+            background: #238636;
+            color: white;
+            border: 1px solid rgba(240,246,252,0.1);
+            padding: 10px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: background-color 0.2s;
+            font-weight: 500;
+        }
+
+        button:hover {
+            background: #2ea043;
+        }
+
+        /* 读图说明面板 */
+        #interpretation {
+            width: 92vw;
+            max-width: 1200px;
+            margin-top: 20px;
+            padding: 24px;
+            background: #161b22;
+            border: 1px solid var(--grid-color);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            line-height: 1.7;
+            box-sizing: border-box;
+        }
+        
+        #interpretation h2 { 
+            margin-top: 0; 
+            font-size: 1.25rem; 
+            border-bottom: 1px solid var(--grid-color); 
+            padding-bottom: 12px; 
+            color: #ffffff;
+        }
+
+        .legend-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+
+        .legend-item {
+            background: rgba(255,255,255,0.03);
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .legend-title {
+            font-weight: 600;
+            color: #58a6ff;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        /* SVG 元素悬浮效果 */
+        .tanghulu-bar polygon {
+            transition: fill 0.2s, stroke 0.2s;
+        }
+        .tanghulu-bar:hover polygon {
+            stroke: #ffffff;
+            stroke-width: 1.5px;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>糖胡芦图 (Tanghulu Chart)</h1>
+    <p class="subtitle">将价格区间与成交量分布（Volume Profile）融合的二维金融可视化语言</p>
+</header>
+
+<div id="controls">
+    <button id="regenerate-btn">重新生成模拟行情数据</button>
+</div>
+
+<div id="chart-container">
+    <svg id="chart-svg">
+        <defs>
+            <!-- 可以在这里定义渐变或滤镜以增加质感 -->
+        </defs>
+        <!-- 背景网格 -->
+        <g id="grid-group"></g>
+        <!-- 糖胡芦图形实体 -->
+        <g id="elements-group"></g>
+        <!-- 坐标轴标签 -->
+        <g id="axis-labels-group"></g>
+    </svg>
+</div>
+
+<div id="interpretation">
+    <h2>读图说明 (Interpretation Guide)</h2>
+    <p>糖胡芦图旨在打破传统K线图仅表达时间维度的局限，将<strong>市场真正在哪里成交（流动性结构）</strong>直接编码到图形的几何形态中。</p>
+    
+    <div class="legend-grid">
+        <div class="legend-item">
+            <span class="legend-title">📍 竹签 (垂直中轴线)</span>
+            代表该交易日的价格极值区间。顶端为<strong>最高价 (High)</strong>，底端为<strong>最低价 (Low)</strong>。
+        </div>
+        <div class="legend-item">
+            <span class="legend-title">🍎 糖胡芦本体 (多边形宽度)</span>
+            代表<strong>成交量分布</strong>。图形在某一价格水平越宽，说明该价格区域发生的交易量越大（市场共识强）；越窄则说明交易稀少（市场拒绝该价格）。
+        </div>
+        <div class="legend-item">
+            <span class="legend-title">🎯 POC (高亮水平线)</span>
+            最宽处的高亮亮色横线代表 <strong>Point of Control (主要成交价)</strong>，即全天成交量最大的单一价格点。
+        </div>
+        <div class="legend-item">
+            <span class="legend-title">🎨 颜色 (涨跌方向)</span>
+            收盘价 ≥ 开盘价，整体呈现 <span style="color: var(--up-poc);">绿色 (阳线)</span>。<br>
+            收盘价 < 开盘价，整体呈现 <span style="color: var(--down-poc);">红色 (阴线)</span>。
+        </div>
+    </div>
+    <p style="margin-top: 15px; color: #8b949e; font-size: 0.9rem;">
+        <em>观察技巧：</em> 不要去寻找开盘和收盘价的具体点位，而是观察<strong>最宽处（价值中枢）的形态和跨日迁移轨迹</strong>。饱满的“圆球”代表剧烈博弈后的价值认同，细长的“竹签”代表行情的快速推进与真空区。
+    </p>
+</div>
+
+<script>
+    /**
+     * 糖胡芦图 (Tanghulu Chart) - 核心逻辑
+     */
+
+    const config = {
+        sessionCount: 40,      // 画布显示的交易日数量
+        padding: { top: 40, right: 60, bottom: 40, left: 60 },
+        barSpacing: 0.85,      // 图形最大宽度占单列宽度的比例 (0.1 ~ 1.0)
+        volumeSteps: 60,       // 将价格区间切分的层数（层数越多，多边形越平滑）
+    };
+
+    // --- 数据生成模块 (Data Simulation) ---
+    // 在实际生产环境中，此部分将被真实后端的逐笔数据 (Tick Data) 或 TPO 数据替代
+    function generateData(count) {
+        const data = [];
+        let currentPrice = 3000; // 初始价格
+        let volatility = 30;     // 初始波动率
+
+        for (let i = 0; i < count; i++) {
+            // 1. 生成基础 OHLC 价格
+            const open = currentPrice + (Math.random() - 0.5) * volatility;
+            const high = open + Math.random() * volatility * 1.8;
+            const low = open - Math.random() * volatility * 1.8;
+            const close = low + Math.random() * (high - low);
+            const totalVolume = Math.round(10000 + Math.random() * 20000);
+
+            // 2. 模拟真实市场的多峰成交量分布 (Multi-modal Volume Distribution)
+            // 真实市场的成交量并非均匀分布，通常在某些价格产生聚集
+            
+            // 估算一个 POC (Point of Control) 附近位置
+            const weightOpen = 0.2, weightClose = 0.6, weightMid = 0.2;
+            const midPrice = (high + low) / 2;
+            let poc = (open * weightOpen + close * weightClose + midPrice * weightMid) / (weightOpen + weightClose + weightMid);
+            // 增加随机偏移，使其不那么刻板
+            poc += (Math.random() - 0.5) * (high - low) * 0.2;
+            poc = Math.max(low * 1.05, Math.min(high * 0.95, poc)); // 限制在最高最低价范围内
+
+            const profile = [];
+            const stepSize = (high - low) / (config.volumeSteps - 1);
+            const sigma = (high - low) * 0.12; // 主钟形曲线的标准差（控制“果肉”的集中度）
+            const peakVolume = totalVolume * 2;
+
+            for (let step = 0; step < config.volumeSteps; step++) {
+                const priceLevel = low + step * stepSize;
+                
+                // 基础分布：围绕 POC 的高斯分布
+                let volumeAtPrice = (peakVolume / (sigma * Math.sqrt(2 * Math.PI))) * Math.exp(-Math.pow(priceLevel - poc, 2) / (2 * Math.pow(sigma, 2)));
+
+                // 模拟次级成交密集区 (例如开盘或收盘附近产生的阻力/支撑)
+                const secondaryCluster = (Math.random() > 0.5) ? open : close;
+                const secSigma = sigma * 0.5;
+                const secVolume = (peakVolume * 0.3 / (secSigma * Math.sqrt(2 * Math.PI))) * Math.exp(-Math.pow(priceLevel - secondaryCluster, 2) / (2 * Math.pow(secSigma, 2)));
+                
+                volumeAtPrice += secVolume;
+                
+                // 增加少量白噪声（体现真实市场的无序感）
+                volumeAtPrice += peakVolume * 0.02 * Math.random();
+
+                profile.push({ price: priceLevel, volume: volumeAtPrice });
+            }
+
+            // 数据归一化处理，确保 Profile 总量与 Session 总量大致匹配
+            const simProfileVolume = profile.reduce((sum, p) => sum + p.volume, 0);
+            profile.forEach(p => p.volume = (p.volume / simProfileVolume) * totalVolume);
+
+            // 重新精确计算由于加入了次峰和噪声后，真实的 POC 在哪里
+            let actualPocPrice = poc;
+            let maxVol = 0;
+            profile.forEach(p => {
+                if(p.volume > maxVol) {
+                    maxVol = p.volume;
+                    actualPocPrice = p.price;
+                }
+            });
+
+            // 生成模拟日期
+            const date = new Date();
+            date.setDate(date.getDate() - count + i);
+
+            data.push({
+                date: date,
+                open, high, low, close,
+                totalVolume,
+                poc: actualPocPrice,
+                maxVolumeAtPrice: maxVol, // 记录单层最大成交量，用于宽度比例计算
+                volumeProfile: profile
+            });
+
+            // 准备下一天的数据（模拟趋势变化）
+            currentPrice = close;
+            // 加入长周期正弦波，模拟市场波动率的放大与缩小
+            volatility = 15 + Math.abs(Math.sin(i / 8)) * 25;
+        }
+        return data;
+    }
+
+    // --- 图表渲染引擎 (SVG Rendering Engine) ---
+    class TanghuluChart {
+        constructor(containerId, svgId) {
+            this.container = document.getElementById(containerId);
+            this.svg = document.getElementById(svgId);
+            this.gridGroup = document.getElementById('grid-group');
+            this.elementsGroup = document.getElementById('elements-group');
+            this.labelsGroup = document.getElementById('axis-labels-group');
+            this.data = [];
+            this.resizeObserver = new ResizeObserver(() => this.render());
+            this.resizeObserver.observe(this.container);
+        }
+
+        setData(data) {
+            this.data = data;
+            this.render();
+        }
+
+        updateDimensions() {
+            // 获取容器实际像素尺寸
+            this.width = this.container.clientWidth;
+            this.height = this.container.clientHeight;
+            this.plotWidth = this.width - config.padding.left - config.padding.right;
+            this.plotHeight = this.height - config.padding.top - config.padding.bottom;
+        }
+
+        render() {
+            if (!this.data || this.data.length === 0 || !this.container.clientWidth) return;
+            this.updateDimensions();
+            
+            // 清空旧图层
+            this.gridGroup.innerHTML = '';
+            this.elementsGroup.innerHTML = '';
+            this.labelsGroup.innerHTML = '';
+
+            // 1. 计算比例尺 (Scales)
+            const allHighs = this.data.map(d => d.high);
+            const allLows = this.data.map(d => d.low);
+            const minPrice = Math.min(...allLows);
+            const maxPrice = Math.max(...allHighs);
+            const pricePadding = (maxPrice - minPrice) * 0.08; // 顶部和底部留白
+
+            // Y轴：价格比例尺
+            this.yScale = (price) => {
+                const percentage = (price - (minPrice - pricePadding)) / (maxPrice - minPrice + 2 * pricePadding);
+                return config.padding.top + this.plotHeight * (1 - percentage);
+            };
+
+            // X轴：时间/索引比例尺
+            const colWidth = this.plotWidth / this.data.length;
+            this.xScale = (index) => {
+                return config.padding.left + index * colWidth + (colWidth / 2);
+            };
+
+            // 宽度比例尺：找出全局最大单层成交量，作为多边形宽度的上限
+            const globalMaxVolume = Math.max(...this.data.map(d => d.maxVolumeAtPrice));
+            
+            this.volumeWidthScale = (volumeAtPrice) => {
+                const maxAvailableHalfWidth = (colWidth * config.barSpacing) / 2;
+                const percentage = volumeAtPrice / globalMaxVolume;
+                // 使用开方稍微平滑一下极值带来的视觉影响
+                return Math.sqrt(percentage) * maxAvailableHalfWidth;
+            };
+
+            // 2. 渲染各图层
+            this.renderGrid(minPrice - pricePadding, maxPrice + pricePadding);
+            this.renderTanghuluElements(colWidth);
+            this.renderAxisLabels(minPrice - pricePadding, maxPrice + pricePadding);
+        }
+
+        renderGrid(yMin, yMax) {
+            // 横向网格线 (价格)
+            const tickCountY = 8;
+            for (let i = 0; i <= tickCountY; i++) {
+                const price = yMin + (yMax - yMin) * (i / tickCountY);
+                const y = this.yScale(price);
+                const line = this.createSVGElement('line', {
+                    x1: config.padding.left, y1: y,
+                    x2: this.width - config.padding.right, y2: y,
+                    class: 'grid-line'
+                });
+                this.gridGroup.appendChild(line);
+            }
+        }
+
+        renderTanghuluElements(colWidth) {
+            this.data.forEach((session, index) => {
+                const xCenter = this.xScale(index);
+                const isBullish = session.close >= session.open;
+                const bodyColor = isBullish ? 'var(--up-color)' : 'var(--down-color)';
+                const pocColor = isBullish ? 'var(--up-poc)' : 'var(--down-poc)';
+
+                // 创建单个图形的编组
+                const g = this.createSVGElement('g', { class: 'tanghulu-bar' });
+
+                // 1. 绘制竹签 (Skewer) - 最高价到最低价的连线
+                const skewer = this.createSVGElement('line', {
+                    x1: xCenter, y1: this.yScale(session.high),
+                    x2: xCenter, y2: this.yScale(session.low),
+                    stroke: 'var(--skewer-color)', strokeWidth: 1.5
+                });
+                g.appendChild(skewer);
+
+                // 2. 绘制多边形轮廓 (Volume Distribution Polygon)
+                let points = [];
+                const profile = session.volumeProfile;
+
+                // 右侧轮廓 (自下而上)
+                for (let i = 0; i < profile.length; i++) {
+                    const y = this.yScale(profile[i].price);
+                    const widthOffset = this.volumeWidthScale(profile[i].volume);
+                    points.push(`${xCenter + widthOffset},${y}`);
+                }
+                // 左侧轮廓 (自上而下)
+                for (let i = profile.length - 1; i >= 0; i--) {
+                    const y = this.yScale(profile[i].price);
+                    const widthOffset = this.volumeWidthScale(profile[i].volume);
+                    points.push(`${xCenter - widthOffset},${y}`);
+                }
+
+                const shape = this.createSVGElement('polygon', {
+                    points: points.join(' '),
+                    fill: bodyColor,
+                    stroke: 'none'
+                });
+                g.appendChild(shape);
+
+                // 3. 绘制 POC (Point of Control) 线条
+                const pocY = this.yScale(session.poc);
+                // 获取 POC 处的分布宽度作为线条宽度
+                const pocHalfWidth = this.volumeWidthScale(session.maxVolumeAtPrice);
+
+                const pocLine = this.createSVGElement('line', {
+                    x1: xCenter - pocHalfWidth - 2, y1: pocY,
+                    x2: xCenter + pocHalfWidth + 2, y2: pocY, // 稍微超出多边形一点，使其显眼
+                    stroke: pocColor, strokeWidth: 2
+                });
+                g.appendChild(pocLine);
+
+                // 可选扩展：在这里添加开盘价和收盘价的细微标记（例如小横杠），以保留传统K线信息
+                // const openY = this.yScale(session.open);
+                // const openMark = this.createSVGElement('line', { x1: xCenter - 4, y1: openY, x2: xCenter, y2: openY, stroke: '#fff', strokeWidth: 1 });
+                // g.appendChild(openMark);
+
+                this.elementsGroup.appendChild(g);
+            });
+        }
+
+        renderAxisLabels(yMin, yMax) {
+            // Y 轴标签 (价格)
+            const tickCountY = 8;
+            for (let i = 0; i <= tickCountY; i++) {
+                const price = yMin + (yMax - yMin) * (i / tickCountY);
+                const y = this.yScale(price);
+                const label = this.createSVGElement('text', {
+                    x: this.width - config.padding.right + 10, y: y,
+                    class: 'axis-label', 'text-anchor': 'start', 'dominant-baseline': 'middle'
+                });
+                label.textContent = price.toFixed(1);
+                this.labelsGroup.appendChild(label);
+            }
+
+            // X 轴标签 (时间 - 每隔几根柱子显示一次防止重叠)
+            const stepX = Math.ceil(this.data.length / 8); 
+            for (let i = 0; i < this.data.length; i += stepX) {
+                const x = this.xScale(i);
+                const label = this.createSVGElement('text', {
+                    x: x, y: this.height - config.padding.bottom + 25,
+                    class: 'axis-label', 'text-anchor': 'middle'
+                });
+                const d = this.data[i].date;
+                label.textContent = `${d.getMonth() + 1}/${d.getDate()}`;
+                this.labelsGroup.appendChild(label);
+            }
+        }
+
+        // SVG 元素创建助手工具
+        createSVGElement(tag, attrs) {
+            const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+            for (let key in attrs) {
+                el.setAttribute(key, attrs[key]);
+            }
+            return el;
+        }
+    }
+
+    // --- 初始化及事件绑定 ---
+    const chart = new TanghuluChart('chart-container', 'chart-svg');
+
+    function init() {
+        const newData = generateData(config.sessionCount);
+        chart.setData(newData);
+    }
+
+    // 初次渲染
+    init();
+
+    // 绑定按钮事件
+    document.getElementById('regenerate-btn').addEventListener('click', () => {
+        // 添加一个简单的过渡动画效果
+        const svg = document.getElementById('chart-svg');
+        svg.style.opacity = '0.3';
+        setTimeout(() => {
+            init();
+            svg.style.opacity = '1';
+        }, 150);
+    });
+
+</script>
+</body>
+</html>

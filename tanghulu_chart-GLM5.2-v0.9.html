@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>体积加权宽度K线图 - Volume-Weighted Width Candlestick</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Microsoft YaHei','PingFang SC','Helvetica Neue',Arial,sans-serif;
+    background: linear-gradient(135deg,#f0f2f5 0%,#e3e8ef 100%);
+    color:#333; line-height:1.7; padding:20px;
+  }
+  .container { max-width:1300px; margin:0 auto; }
+
+  /* ===== Header ===== */
+  header {
+    background: linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);
+    color:#fff; padding:36px 30px; border-radius:14px;
+    box-shadow:0 6px 24px rgba(0,0,0,.15); margin-bottom:24px;
+  }
+  header h1 { font-size:28px; margin-bottom:6px; }
+  header .subtitle { color:#9ad3ff; font-size:14px; }
+  header .tags { margin-top:14px; }
+  header .tag {
+    display:inline-block; background:rgba(229,57,53,.25); color:#ff8a80;
+    padding:4px 14px; border-radius:20px; font-size:12px;
+    border:1px solid rgba(229,57,53,.4); margin-right:8px;
+  }
+  header .tag.blue { background:rgba(67,160,71,.25); color:#a5d6a7; border-color:rgba(67,160,71,.4); }
+
+  /* ===== Controls ===== */
+  .controls {
+    display:flex; gap:12px; flex-wrap:wrap; align-items:center;
+    margin-bottom:16px;
+  }
+  .btn {
+    padding:8px 18px; border:none; border-radius:8px; cursor:pointer;
+    font-size:13px; font-weight:600; transition:all .2s;
+  }
+  .btn-primary { background:#E53935; color:#fff; }
+  .btn-primary:hover { background:#c62828; }
+  .btn-secondary { background:#43A047; color:#fff; }
+  .btn-secondary:hover { background:#2e7d32; }
+  .btn-outline { background:#fff; color:#333; border:2px solid #ddd; }
+  .btn-outline:hover { border-color:#E53935; color:#E53935; }
+  .toggle-group { display:flex; background:#e0e0e0; border-radius:8px; overflow:hidden; }
+  .toggle-group button {
+    padding:8px 16px; border:none; background:none; cursor:pointer;
+    font-size:13px; font-weight:600; transition:all .2s;
+  }
+  .toggle-group button.active { background:#fff; color:#E53935; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+
+  /* ===== Chart ===== */
+  .chart-card {
+    background:#fff; border-radius:14px; padding:20px;
+    box-shadow:0 4px 16px rgba(0,0,0,.08); margin-bottom:24px;
+  }
+  .chart-title {
+    font-size:16px; font-weight:bold; color:#1a1a2e; margin-bottom:12px;
+    padding-left:12px; border-left:4px solid #E53935;
+  }
+  canvas { display:block; width:100%; }
+
+  /* ===== Tooltip ===== */
+  #tooltip {
+    position:absolute; display:none; pointer-events:none;
+    background:rgba(26,26,46,.95); color:#fff; padding:12px 16px;
+    border-radius:8px; font-size:12px; line-height:1.8; z-index:1000;
+    box-shadow:0 4px 20px rgba(0,0,0,.3); min-width:180px;
+    border:1px solid rgba(255,255,255,.1);
+  }
+  #tooltip .tt-title { font-size:13px; font-weight:bold; margin-bottom:6px; border-bottom:1px solid rgba(255,255,255,.15); padding-bottom:4px; }
+  #tooltip .tt-row { display:flex; justify-content:space-between; }
+  #tooltip .tt-label { color:#aaa; }
+  #tooltip .tt-up { color:#ff5252; }
+  #tooltip .tt-down { color:#69f0ae; }
+
+  /* ===== Info Section ===== */
+  .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:24px; }
+  @media(max-width:768px){ .info-grid{ grid-template-columns:1fr; } }
+  .card {
+    background:#fff; padding:28px; border-radius:14px;
+    box-shadow:0 4px 16px rgba(0,0,0,.08);
+  }
+  .card h2 {
+    font-size:18px; color:#1a1a2e; border-left:4px solid #E53935;
+    padding-left:12px; margin-bottom:16px;
+  }
+  .card ul { list-style:none; }
+  .card ul li { padding:8px 0; border-bottom:1px solid #f0f0f0; font-size:14px; }
+  .card ul li:last-child { border-bottom:none; }
+  .card ul li b { color:#E53935; }
+  .legend-row { display:flex; align-items:center; gap:10px; padding:6px 0; font-size:14px; }
+  .color-box { width:28px; height:16px; border-radius:3px; flex-shrink:0; border:1px solid #ddd; }
+  .highlight {
+    background:linear-gradient(135deg,#FFF9C4,#FFF3E0);
+    border-left:4px solid #F9A825; padding:16px; border-radius:8px; margin:14px 0; font-size:14px;
+  }
+  .highlight b { color:#E65100; }
+  .formula {
+    background:#f5f5f5; padding:12px 16px; border-radius:6px;
+    font-family:Consolas,monospace; font-size:13px; margin:10px 0;
+  }
+
+  /* ===== Section labels ===== */
+  .section-label { display:flex; align-items:center; gap:10px; margin-bottom:16px; margin-top:8px; }
+  .section-label .num {
+    background:#E53935; color:#fff; width:28px; height:28px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:bold;
+  }
+  .section-label .text { font-size:16px; font-weight:bold; color:#1a1a2e; }
+
+  footer { text-align:center; color:#999; font-size:12px; padding:20px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>体积加权宽度K线图</h1>
+    <p class="subtitle">Volume-Weighted Width Candlestick Chart — 一种新型金融K线设计</p>
+    <div class="tags">
+      <span class="tag">HTML5 Canvas</span>
+      <span class="tag blue">纯前端实现</span>
+      <span class="tag blue">交互式</span>
+    </div>
+  </header>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="toggle-group">
+      <button id="btnNovel" class="active" onclick="setView('novel')">新型K线（糖葫芦）</button>
+      <button id="btnStandard" onclick="setView('standard')">标准K线（对比）</button>
+    </div>
+    <button class="btn btn-primary" onclick="regenerate()">🔄 重新生成数据</button>
+    <button class="btn btn-outline" onclick="toggleMA()">📊 5日均线</button>
+  </div>
+
+  <!-- Main Chart -->
+  <div class="chart-card">
+    <div class="chart-title" id="chartTitle">体积加权宽度K线图 — 30个交易日</div>
+    <canvas id="priceChart"></canvas>
+    <canvas id="volumeChart" style="margin-top:4px;"></canvas>
+  </div>
+
+  <!-- Tooltip -->
+  <div id="tooltip"></div>
+
+  <!-- Info -->
+  <div class="info-grid">
+    <div class="card">
+      <h2>📖 如何读取</h2>
+      <ul>
+        <li><b>X轴</b>：时间（交易日），每根K线按日期排列</li>
+        <li><b>Y轴</b>：价格（元）</li>
+        <li><b>实体（深色）</b>：开盘价→收盘价，宽度随该区间成交量变化</li>
+        <li><b>影线（浅色）</b>：实体上方/下方，宽度随该区间成交量变化</li>
+        <li><b>白色横线</b>：标记开盘价和收盘价位置</li>
+        <li><b>整体宽度</b>：随当日总成交量缩放</li>
+      </ul>
+      <div class="legend-row"><div class="color-box" style="background:#E53935"></div><span>红色 = 阳线（收盘 &gt; 开盘，涨）</span></div>
+      <div class="legend-row"><div class="color-box" style="background:#43A047"></div><span>绿色 = 阴线（收盘 &lt; 开盘，跌）</span></div>
+      <div class="legend-row"><div class="color-box" style="background:#FFCDD2"></div><span>浅色 = 影线（成交量较稀疏）</span></div>
+    </div>
+    <div class="card">
+      <h2>🔬 设计原理</h2>
+      <ul>
+        <li>每根K线分为 <b>50个价格切片</b></li>
+        <li>每个切片对应一个价格水平</li>
+        <li>切片宽度 ∝ 该价位的成交量</li>
+        <li>成交量呈<b>正态分布</b>：</li>
+      </ul>
+      <div class="formula">
+        均值 μ = (开盘价 + 收盘价) / 2<br>
+        标准差 σ = (最高价 - 最低价) / 4<br>
+        volume[i] = N(μ, σ²) × 当日总成交量
+      </div>
+      <p>因此K线呈<b>"糖葫芦"形状</b>：中间粗、两头细。</p>
+      <div class="highlight">
+        <b>💡 核心创新</b>：标准K线宽度固定，浪费视觉空间。本设计将<b>成交量分布</b>直接编码到K线宽度中，一眼即可看出哪个价位成交最密集。
+      </div>
+    </div>
+  </div>
+
+  <footer><p>体积加权宽度K线图 | 纯 HTML5 Canvas + JavaScript 实现 | 2025-07-05</p></footer>
+</div>
+
+<script>
+// ============================================================
+//  配置
+// ============================================================
+const CONFIG = {
+  nDays: 30,
+  nSlices: 50,
+  baseWidth: 0.65,
+  colors: {
+    up: '#E53935', upShadow: 'rgba(255,205,210,0.65)',
+    down: '#43A047', downShadow: 'rgba(200,230,201,0.65)',
+    ma: '#FF9800', grid: '#E8E8E8', bg: '#FAFAFA',
+    text: '#333', axis: '#666', border: '#ccc'
+  }
+};
+
+// ============================================================
+//  简易随机数生成器（可复现）
+// ============================================================
+class RNG {
+  constructor(seed) { this.s = seed; }
+  next() {
+    this.s = (this.s * 9301 + 49297) % 233280;
+    return this.s / 233280;
+  }
+  // Box-Muller 正态分布
+  normal(mean=0, std=1) {
+    const u1 = Math.max(this.next(), 1e-10);
+    const u2 = this.next();
+    const z = Math.sqrt(-2*Math.log(u1)) * Math.cos(2*Math.PI*u2);
+    return mean + z * std;
+  }
+  lognormal(mean, std) {
+    return Math.exp(this.normal(mean, std));
+  }
+}
+
+// ============================================================
+//  数据生成
+// ============================================================
+let chartData = null;
+let showMA = true;
+let viewMode = 'novel';
+
+function generateData(seed=42) {
+  const rng = new RNG(seed);
+  const n = CONFIG.nDays;
+  const open=[], high=[], low=[], close=[], volume=[], dates=[];
+
+  // 价格随机游走
+  let prevClose = 100;
+  const returns = [];
+  for (let i=0; i<n; i++) returns.push(rng.normal(0.001, 0.025));
+
+  for (let i=0; i<n; i++) {
+    close.push(prevClose * (1 + returns[i]));
+    if (i===0) open.push(98);
+    else open.push(prevClose * (1 + rng.normal(0, 0.003)));
+
+    const bodyR = Math.abs(close[i]-open[i]) + 0.01;
+    const shadowE = Math.abs(rng.normal(0, 0.012)) + 0.003;
+    high.push(Math.max(open[i],close[i]) + bodyR*0.3 + shadowE*Math.max(open[i],close[i]));
+    low.push(Math.min(open[i],close[i]) - bodyR*0.3 - shadowE*Math.min(open[i],close[i]));
+    high[i] = Math.max(high[i], Math.max(open[i],close[i])*1.001);
+    low[i] = Math.min(low[i], Math.min(open[i],close[i])*0.999);
+    volume.push(rng.lognormal(13.8, 0.35));
+
+    const d = new Date(2025, 5, 2+i);
+    dates.push(d);
+
+    prevClose = close[i];
+  }
+
+  // 计算每日的成交量分布
+  const distributions = [];
+  for (let i=0; i<n; i++) {
+    const prices = [];
+    const vols = [];
+    const mean = (open[i]+close[i])/2;
+    const std = Math.max((high[i]-low[i])/4, 1e-6);
+    let rawSum = 0;
+    for (let j=0; j<CONFIG.nSlices; j++) {
+      const p = low[i] + (high[i]-low[i]) * j / (CONFIG.nSlices-1);
+      const raw = Math.exp(-0.5 * Math.pow((p-mean)/std, 2));
+      prices.push(p);
+      vols.push(raw);
+      rawSum += raw;
+    }
+    // 归一化并缩放到总成交量
+    for (let j=0; j<CONFIG.nSlices; j++) vols[j] = vols[j]/rawSum * volume[i];
+    distributions.push({ prices, vols });
+  }
+
+  // 5日均线
+  const ma5 = [];
+  for (let i=0; i<n; i++) {
+    if (i<2 || i>=n-2) { ma5.push(null); continue; }
+    let s=0;
+    for (let k=-2; k<=2; k++) s+=close[i+k];
+    ma5.push(s/5);
+  }
+
+  return { open, high, low, close, volume, dates, distributions, ma5 };
+}
+
+// ============================================================
+//  Canvas 渲染器
+// ============================================================
+class ChartRenderer {
+  constructor(priceCanvas, volCanvas) {
+    this.pc = priceCanvas;
+    this.vc = volCanvas;
+    this.pctx = priceCanvas.getContext('2d');
+    this.vctx = volCanvas.getContext('2d');
+    this.hoveredDay = -1;
+    this.setupCanvas();
+    this.bindEvents();
+  }
+
+  setupCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = this.pc.parentElement.clientWidth - 40;
+
+    // Price chart
+    this.pW = w;
+    this.pH = 480;
+    this.pc.width = this.pW * dpr;
+    this.pc.height = this.pH * dpr;
+    this.pc.style.width = this.pW + 'px';
+    this.pc.style.height = this.pH + 'px';
+    this.pctx.scale(dpr, dpr);
+
+    // Volume chart
+    this.vW = w;
+    this.vH = 130;
+    this.vc.width = this.vW * dpr;
+    this.vc.height = this.vH * dpr;
+    this.vc.style.width = this.vW + 'px';
+    this.vc.style.height = this.vH + 'px';
+    this.vctx.scale(dpr, dpr);
+
+    // Margins
+    this.mL = 60; this.mR = 20; this.mT = 20; this.mB = 30;
+  }
+
+  bindEvents() {
+    this.pc.addEventListener('mousemove', (e) => this.onMouseMove(e));
+    this.pc.addEventListener('mouseleave', () => { this.hoveredDay=-1; this.hideTooltip(); this.draw(); });
+    window.addEventListener('resize', () => { this.setupCanvas(); this.draw(); });
+  }
+
+  setData(data) { this.data = data; }
+
+  // 坐标转换
+  dayToX(d) {
+    const cw = (this.pW - this.mL - this.mR) / this.data.close.length;
+    return this.mL + (d + 0.5) * cw;
+  }
+  priceToY(p) {
+    const yMin = this.yMin, yMax = this.yMax;
+    const h = this.pH - this.mT - this.mB;
+    return this.mT + (yMax - p) / (yMax - yMin) * h;
+  }
+  volToY(v) {
+    const vMax = Math.max(...this.data.volume);
+    const h = this.vH - this.mT - this.mB;
+    return this.mT + (1 - v/vMax) * h;
+  }
+  dayWidth() {
+    return (this.pW - this.mL - this.mR) / this.data.close.length;
+  }
+
+  draw() {
+    if (!this.data) return;
+    // 计算 Y 范围
+    this.yMin = Math.min(...this.data.low) * 0.96;
+    this.yMax = Math.max(...this.data.high) * 1.04;
+
+    this.pctx.clearRect(0,0,this.pW,this.pH);
+    this.vctx.clearRect(0,0,this.vW,this.vH);
+
+    this.drawGrid();
+    this.drawAxes();
+    this.drawCandles();
+    if (showMA) this.drawMA();
+    this.drawVolumeBars();
+    this.drawVolAxes();
+    if (this.hoveredDay >= 0) this.drawHover();
+  }
+
+  drawGrid() {
+    const ctx = this.pctx;
+    ctx.strokeStyle = CONFIG.colors.grid;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3,3]);
+
+    // 水平网格线（价格）
+    const steps = 8;
+    for (let i=0; i<=steps; i++) {
+      const y = this.mT + (this.pH-this.mT-this.mB) * i / steps;
+      ctx.beginPath(); ctx.moveTo(this.mL, y); ctx.lineTo(this.pW-this.mR, y); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  drawAxes() {
+    const ctx = this.pctx;
+    ctx.fillStyle = CONFIG.colors.bg;
+    ctx.fillRect(0,0,this.mL,this.pH);
+    ctx.fillRect(this.pW-this.mR,0,this.mR,this.pH);
+
+    // Y轴价格标签
+    ctx.fillStyle = CONFIG.colors.axis;
+    ctx.font = '11px Microsoft YaHei';
+    ctx.textAlign = 'right';
+    const steps = 8;
+    for (let i=0; i<=steps; i++) {
+      const price = this.yMax - (this.yMax-this.yMin) * i / steps;
+      const y = this.mT + (this.pH-this.mT-this.mB) * i / steps;
+      ctx.fillText(price.toFixed(1), this.mL-8, y+4);
+    }
+
+    // X轴日期标签
+    ctx.textAlign = 'center';
+    ctx.font = '10px Microsoft YaHei';
+    const n = this.data.close.length;
+    const labelStep = Math.ceil(n / 10);
+    for (let i=0; i<n; i+=labelStep) {
+      const x = this.dayToX(i);
+      const d = this.data.dates[i];
+      ctx.fillText(`${d.getMonth()+1}/${d.getDate()}`, x, this.pH - 10);
+    }
+  }
+
+  drawCandles() {
+    const n = this.data.close.length;
+    for (let i=0; i<n; i++) this.drawCandle(i);
+  }
+
+  drawCandle(dayIdx) {
+    if (viewMode === 'standard') { this.drawStandardCandle(dayIdx); return; }
+
+    const ctx = this.pctx;
+    const { open, high, low, close, distributions } = this.data;
+    const dist = distributions[dayIdx];
+    const prices = dist.prices;
+    const vols = dist.vols;
+
+    const volMax = Math.max(...vols);
+    const avgVol = this.data.volume.reduce((a,b)=>a+b,0) / this.data.volume.length;
+    const volScale = Math.min(Math.max(this.data.volume[dayIdx]/avgVol, 0.5), 1.5);
+    const maxHalfW = (this.dayWidth() * CONFIG.baseWidth * volScale) / 2;
+
+    const halfWidths = vols.map(v => (v/volMax) * maxHalfW);
+    const dayX = this.dayToX(dayIdx);
+
+    const o = open[dayIdx], c = close[dayIdx], h = high[dayIdx], l = low[dayIdx];
+    const bodyTop = Math.max(o, c), bodyBot = Math.min(o, c);
+    const isUp = c >= o;
+
+    const bodyColor = isUp ? CONFIG.colors.up : CONFIG.colors.down;
+    const shadowColor = isUp ? CONFIG.colors.upShadow : CONFIG.colors.downShadow;
+
+    // 辅助函数：在指定价格区间绘制多边形
+    const drawSegment = (pLo, pHi, fillColor, strokeColor, lineWidth) => {
+      if (pHi - pLo < 1e-9) return;
+
+      // 找到区间内的切片，加上精确边界
+      const segPrices = [], segWidths = [];
+      for (let j=0; j<prices.length; j++) {
+        if (prices[j] >= pLo-1e-9 && prices[j] <= pHi+1e-9) {
+          segPrices.push(prices[j]);
+          segWidths.push(halfWidths[j]);
+        }
+      }
+      // 插值边界
+      if (segPrices.length === 0 || Math.abs(segPrices[0]-pLo) > 1e-9) {
+        const w = this.interpWidth(prices, halfWidths, pLo);
+        segPrices.unshift(pLo); segWidths.unshift(w);
+      }
+      if (segPrices.length === 0 || Math.abs(segPrices[segPrices.length-1]-pHi) > 1e-9) {
+        const w = this.interpWidth(prices, halfWidths, pHi);
+        segPrices.push(pHi); segWidths.push(w);
+      }
+
+      if (segPrices.length < 2) return;
+
+      // 构建多边形：右侧上→下，左侧下→上
+      ctx.beginPath();
+      for (let j=0; j<segPrices.length; j++) {
+        const x = dayX + segWidths[j];
+        const y = this.priceToY(segPrices[j]);
+        if (j===0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      for (let j=segPrices.length-1; j>=0; j--) {
+        const x = dayX - segWidths[j];
+        const y = this.priceToY(segPrices[j]);
+        ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = fillColor;
+      ctx.fill();
+      if (strokeColor) { ctx.strokeStyle = strokeColor; ctx.lineWidth = lineWidth||0.5; ctx.stroke(); }
+    };
+
+    // 上影线
+    drawSegment(bodyTop, h, shadowColor, bodyColor, 0.3);
+    // 下影线
+    drawSegment(l, bodyBot, shadowColor, bodyColor, 0.3);
+    // 实体
+    drawSegment(bodyBot, bodyTop, bodyColor, bodyColor, 0.8);
+
+    // 开盘/收盘白色细线
+    const tickW = maxHalfW * 0.2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(dayX - tickW, this.priceToY(o));
+    ctx.lineTo(dayX + tickW, this.priceToY(o));
+    ctx.moveTo(dayX - tickW, this.priceToY(c));
+    ctx.lineTo(dayX + tickW, this.priceToY(c));
+    ctx.stroke();
+  }
+
+  interpWidth(prices, widths, p) {
+    if (p <= prices[0]) return widths[0];
+    if (p >= prices[prices.length-1]) return widths[widths.length-1];
+    for (let i=0; i<prices.length-1; i++) {
+      if (p >= prices[i] && p <= prices[i+1]) {
+        const t = (p - prices[i]) / (prices[i+1] - prices[i]);
+        return widths[i] + t * (widths[i+1] - widths[i]);
+      }
+    }
+    return 0;
+  }
+
+  drawStandardCandle(dayIdx) {
+    const ctx = this.pctx;
+    const { open, high, low, close } = this.data;
+    const o = open[dayIdx], c = close[dayIdx], h = high[dayIdx], l = low[dayIdx];
+    const isUp = c >= o;
+    const color = isUp ? CONFIG.colors.up : CONFIG.colors.down;
+    const dayX = this.dayToX(dayIdx);
+    const dw = this.dayWidth();
+    const bodyW = dw * CONFIG.baseWidth * 0.7;
+    const bodyTop = Math.max(o, c), bodyBot = Math.min(o, c);
+
+    // 影线
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(dayX, this.priceToY(h));
+    ctx.lineTo(dayX, this.priceToY(l));
+    ctx.stroke();
+
+    // 实体
+    ctx.fillStyle = color;
+    ctx.fillRect(dayX - bodyW/2, this.priceToY(bodyTop), bodyW, Math.max(this.priceToY(bodyBot)-this.priceToY(bodyTop), 1));
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(dayX - bodyW/2, this.priceToY(bodyTop), bodyW, Math.max(this.priceToY(bodyBot)-this.priceToY(bodyTop), 1));
+  }
+
+  drawMA() {
+    const ctx = this.pctx;
+    const ma5 = this.data.ma5;
+    ctx.strokeStyle = CONFIG.colors.ma;
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    let started = false;
+    for (let i=0; i<ma5.length; i++) {
+      if (ma5[i] === null) continue;
+      const x = this.dayToX(i);
+      const y = this.priceToY(ma5[i]);
+      if (!started) { ctx.moveTo(x, y); started = true; }
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  drawVolumeBars() {
+    const ctx = this.vctx;
+    const n = this.data.close.length;
+    const dw = this.dayWidth();
+
+    // 网格
+    ctx.strokeStyle = CONFIG.colors.grid;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3,3]);
+    for (let i=0; i<=3; i++) {
+      const y = this.mT + (this.vH-this.mT-this.mB) * i / 3;
+      ctx.beginPath(); ctx.moveTo(this.mL, y); ctx.lineTo(this.vW-this.mR, y); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // 背景
+    ctx.fillStyle = CONFIG.colors.bg;
+    ctx.fillRect(0,0,this.mL,this.vH);
+
+    // 标题
+    ctx.fillStyle = CONFIG.colors.axis;
+    ctx.font = '11px Microsoft YaHei';
+    ctx.textAlign = 'left';
+    ctx.fillText('成交量', this.mL+4, this.mT+12);
+
+    // 柱状图
+    for (let i=0; i<n; i++) {
+      const isUp = this.data.close[i] >= this.data.open[i];
+      const color = isUp ? CONFIG.colors.up : CONFIG.colors.down;
+      const x = this.dayToX(i) - dw * CONFIG.baseWidth * 0.35;
+      const w = dw * CONFIG.baseWidth * 0.7;
+      const y = this.volToY(this.data.volume[i]);
+      const h = this.vH - this.mB - y;
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.75;
+      ctx.fillRect(x, y, w, h);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  drawVolAxes() {
+    const ctx = this.vctx;
+    ctx.fillStyle = CONFIG.colors.axis;
+    ctx.font = '10px Microsoft YaHei';
+    ctx.textAlign = 'center';
+    const n = this.data.close.length;
+    const labelStep = Math.ceil(n / 10);
+    for (let i=0; i<n; i+=labelStep) {
+      const x = this.dayToX(i);
+      const d = this.data.dates[i];
+      ctx.fillText(`${d.getMonth()+1}/${d.getDate()}`, x, this.vH - 6);
+    }
+    // Y轴
+    ctx.textAlign = 'right';
+    const vMax = Math.max(...this.data.volume);
+    for (let i=0; i<=3; i++) {
+      const v = vMax * (1 - i/3);
+      const y = this.mT + (this.vH-this.mT-this.mB) * i / 3;
+      let label = v >= 1e6 ? (v/1e6).toFixed(1)+'M' : (v/1e3).toFixed(0)+'K';
+      ctx.fillText(label, this.mL-8, y+4);
+    }
+  }
+
+  drawHover() {
+    if (this.hoveredDay < 0) return;
+    const ctx = this.pctx;
+    const dayX = this.dayToX(this.hoveredDay);
+    ctx.strokeStyle = 'rgba(229,57,53,0.3)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4,4]);
+    ctx.beginPath();
+    ctx.moveTo(dayX, this.mT);
+    ctx.lineTo(dayX, this.pH - this.mB);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  onMouseMove(e) {
+    const rect = this.pc.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const n = this.data.close.length;
+    const dw = (this.pW - this.mL - this.mR) / n;
+    const dayIdx = Math.floor((x - this.mL) / dw);
+    if (dayIdx >= 0 && dayIdx < n) {
+      this.hoveredDay = dayIdx;
+      this.showTooltip(e.clientX, e.clientY, dayIdx);
+      this.draw();
+    }
+  }
+
+  showTooltip(mx, my, dayIdx) {
+    const tt = document.getElementById('tooltip');
+    const { open, high, low, close, volume, dates } = this.data;
+    const o=open[dayIdx], c=close[dayIdx], h=high[dayIdx], l=low[dayIdx];
+    const isUp = c >= o;
+    const chg = ((c-o)/o*100).toFixed(2);
+    const d = dates[dayIdx];
+    const cls = isUp ? 'tt-up' : 'tt-down';
+    const arrow = isUp ? '▲' : '▼';
+
+    tt.innerHTML = `
+      <div class="tt-title">${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}</div>
+      <div class="tt-row"><span class="tt-label">开盘</span><span class="${cls}">${o.toFixed(2)}</span></div>
+      <div class="tt-row"><span class="tt-label">最高</span><span class="${cls}">${h.toFixed(2)}</span></div>
+      <div class="tt-row"><span class="tt-label">最低</span><span class="${cls}">${l.toFixed(2)}</span></div>
+      <div class="tt-row"><span class="tt-label">收盘</span><span class="${cls}">${c.toFixed(2)}</span></div>
+      <div class="tt-row"><span class="tt-label">涨跌</span><span class="${cls}">${arrow} ${Math.abs(chg)}%</span></div>
+      <div class="tt-row"><span class="tt-label">成交量</span><span style="color:#fff">${(volume[dayIdx]/1e6).toFixed(2)}M</span></div>
+    `;
+    tt.style.display = 'block';
+    // 定位
+    const tw = tt.offsetWidth, th = tt.offsetHeight;
+    let tx = mx + 16, ty = my - th/2;
+    if (tx + tw > window.innerWidth - 20) tx = mx - tw - 16;
+    if (ty < 10) ty = 10;
+    tt.style.left = tx + 'px';
+    tt.style.top = ty + 'px';
+  }
+
+  hideTooltip() {
+    document.getElementById('tooltip').style.display = 'none';
+  }
+}
+
+// ============================================================
+//  全局函数
+// ============================================================
+let renderer = null;
+
+function init() {
+  chartData = generateData(42);
+  renderer = new ChartRenderer(
+    document.getElementById('priceChart'),
+    document.getElementById('volumeChart')
+  );
+  renderer.setData(chartData);
+  renderer.draw();
+}
+
+function regenerate() {
+  const seed = Math.floor(Math.random() * 100000);
+  chartData = generateData(seed);
+  renderer.setData(chartData);
+  renderer.draw();
+}
+
+function setView(mode) {
+  viewMode = mode;
+  document.getElementById('btnNovel').classList.toggle('active', mode==='novel');
+  document.getElementById('btnStandard').classList.toggle('active', mode==='standard');
+  document.getElementById('chartTitle').textContent =
+    mode === 'novel' ? '体积加权宽度K线图 — 30个交易日' : '标准K线图（对比）— 30个交易日';
+  renderer.draw();
+}
+
+function toggleMA() {
+  showMA = !showMA;
+  renderer.draw();
+}
+
+// 启动
+window.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
